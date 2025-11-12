@@ -37,8 +37,8 @@ echo "Installing Python dependencies..."
 pip install -r backend/requirements.txt
 
 echo "Starting backend server..."
-echo "Application will be accessible at http://localhost:80"
+echo "Application will be accessible at http://localhost"
 echo "Press Ctrl+C to stop the server"
 echo ""
 
-python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 80
+sudo venv/bin/python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 80
