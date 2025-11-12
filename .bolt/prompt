@@ -2,3 +2,4 @@
 2) Python backend will never use any database
 3) never use bolt database. Never use supabase
 4) this application will be deployed on ubuntu server and frontend will be accessed using only http://localhost. This application will be deployed on Ubuntu as a normal app without docker and k8s. remove uncessery files/folder created for docker/k8s
+5) For frontend, always build compact and modern UI
