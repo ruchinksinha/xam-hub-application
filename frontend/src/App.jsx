@@ -1,9 +1,10 @@
 import React from 'react'
+import Devices from './pages/Devices'
 
 function App() {
   return (
-    <div>
-      <h1>Welcome</h1>
+    <div className="app">
+      <Devices />
     </div>
   )
 }
