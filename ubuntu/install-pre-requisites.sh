@@ -7,8 +7,8 @@ echo "Installing system prerequisites for Android Device Flashing Application...
 echo "Updating package lists..."
 sudo apt-get update
 
-echo "Installing Python 3.11 and pip..."
-sudo apt-get install -y python3.11 python3.11-venv python3-pip
+echo "Installing Python and pip..."
+sudo apt-get install -y python3 python3-venv python3-pip
 
 echo "Installing Node.js and npm..."
 sudo apt-get install -y curl
@@ -69,16 +69,9 @@ echo "Creating application directories..."
 mkdir -p ~/android-flash-app
 cd ~/android-flash-app
 
-echo "Creating Python virtual environment..."
-python3.11 -m venv venv
-
-echo "Installing Python dependencies..."
-source venv/bin/activate
-pip install --upgrade pip
-
 echo "Verifying installations..."
 echo "Python version:"
-python3.11 --version
+python3 --version
 echo "Node version:"
 node --version
 echo "npm version:"
