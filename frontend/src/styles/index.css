@@ -360,3 +360,97 @@ body {
   color: #9ca3af;
   margin-bottom: 8px;
 }
+
+.adb-status-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  justify-content: center;
+}
+
+.adb-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.adb-status-badge-small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.adb-icon {
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.help-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.help-btn:hover {
+  background: #f3f4f6;
+  color: #1a1a1a;
+  border-color: #9ca3af;
+}
+
+.instructions-panel {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  text-align: left;
+}
+
+.instructions-panel h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 12px;
+}
+
+.instructions-panel ol {
+  margin: 0 0 12px 20px;
+  padding: 0;
+}
+
+.instructions-panel li {
+  font-size: 13px;
+  color: #4b5563;
+  margin-bottom: 6px;
+  line-height: 1.5;
+}
+
+.instructions-panel strong {
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+.instructions-panel .note {
+  font-size: 12px;
+  color: #6b7280;
+  font-style: italic;
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}

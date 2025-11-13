@@ -1,6 +1,7 @@
 import asyncio
 import re
 from typing import List, Dict
+from backend.utils.adb_manager import ADBManager
 
 class USBManager:
     MOBILE_DEVICE_KEYWORDS = [
@@ -86,8 +87,13 @@ class USBManager:
                     if USBManager.is_mobile_device(description, vendor_id):
                         mobile_devices.append((bus, device, vendor_id, product_id, description))
 
+            adb_devices = await ADBManager.get_connected_devices()
+            adb_serials = {d['id'] for d in adb_devices}
+
             for bus, device, vendor_id, product_id, description in mobile_devices:
                 serial = await USBManager.get_serial_number(bus, device)
+                adb_ready = serial != 'N/A' and serial in adb_serials
+
                 device_info = {
                     'id': f"{bus}-{device}",
                     'bus': bus,
@@ -96,7 +102,9 @@ class USBManager:
                     'product_id': product_id,
                     'description': description.strip(),
                     'serial': serial,
-                    'status': 'connected'
+                    'status': 'connected',
+                    'adb_ready': adb_ready,
+                    'adb_status': 'authorized' if adb_ready else ('unauthorized' if serial != 'N/A' else 'disabled')
                 }
                 devices.append(device_info)
 
