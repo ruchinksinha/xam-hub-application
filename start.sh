@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -e
-
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
 
@@ -28,19 +26,21 @@ cd ..
 
 echo "Setting up Python virtual environment..."
 if [ ! -d "venv" ]; then
+    echo "Creating virtual environment..."
     python3 -m venv venv
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to create virtual environment"
+    if [ ! -f "venv/bin/pip" ]; then
+        echo "Error: Failed to create virtual environment - pip not found"
         exit 1
     fi
+    echo "Virtual environment created successfully"
 fi
 
 echo "Installing Python dependencies..."
-./venv/bin/pip install -r backend/requirements.txt
+venv/bin/pip install -r backend/requirements.txt
 
 echo "Starting backend server..."
 echo "Application will be accessible at http://localhost"
 echo "Press Ctrl+C to stop the server"
 echo ""
 
-sudo ./venv/bin/python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 80
+sudo venv/bin/python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 80
