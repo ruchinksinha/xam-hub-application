@@ -13,17 +13,26 @@ class ADBManager:
             )
             stdout, stderr = await result.communicate()
 
+            print(f"ADB return code: {result.returncode}")
+            print(f"ADB stdout: {stdout.decode()}")
+            print(f"ADB stderr: {stderr.decode()}")
+
             if result.returncode != 0:
+                print("ADB command failed")
                 return []
 
             devices = []
             lines = stdout.decode().strip().split('\n')[1:]
+            print(f"Processing {len(lines)} lines")
 
             for line in lines:
+                print(f"Processing line: '{line}'")
                 if not line.strip() or 'offline' in line:
+                    print(f"Skipping line (empty or offline)")
                     continue
 
                 parts = line.split()
+                print(f"Parts: {parts}")
                 if len(parts) >= 2:
                     device_id = parts[0]
                     model = 'Unknown'
@@ -33,15 +42,20 @@ class ADBManager:
                             model = part.split(':', 1)[1]
                             break
 
-                    devices.append({
+                    device_info = {
                         'id': device_id,
                         'model': model,
                         'status': 'online'
-                    })
+                    }
+                    print(f"Adding device: {device_info}")
+                    devices.append(device_info)
 
+            print(f"Total devices found: {len(devices)}")
             return devices
         except Exception as e:
             print(f"Error getting devices: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     @staticmethod
