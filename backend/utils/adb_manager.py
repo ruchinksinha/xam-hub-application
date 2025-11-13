@@ -4,8 +4,23 @@ from typing import List, Dict, Optional
 
 class ADBManager:
     @staticmethod
+    async def start_adb_server():
+        try:
+            result = await asyncio.create_subprocess_exec(
+                'adb', 'start-server',
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await result.communicate()
+            print("ADB server started")
+        except Exception as e:
+            print(f"Error starting ADB server: {e}")
+
+    @staticmethod
     async def get_connected_devices() -> List[Dict[str, str]]:
         try:
+            await ADBManager.start_adb_server()
+
             result = await asyncio.create_subprocess_exec(
                 'adb', 'devices', '-l',
                 stdout=asyncio.subprocess.PIPE,
