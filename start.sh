@@ -28,7 +28,7 @@ cd ..
 
 echo "Setting up Python virtual environment..."
 if [ ! -d "venv" ]; then
-    python3.12 -m venv venv
+    python3 -m venv venv
     if [ $? -ne 0 ]; then
         echo "Error: Failed to create virtual environment"
         exit 1
