@@ -27,21 +27,37 @@ async def flash_device(device_id: str):
             detail="Lineage OS URL not configured"
         )
 
-    devices = await ADBManager.get_connected_devices()
-    device_exists = any(d['id'] == device_id for d in devices)
+    usb_devices = await USBManager.get_connected_tablets()
+    usb_device = next((d for d in usb_devices if d['id'] == device_id), None)
 
-    if not device_exists:
+    if not usb_device:
         raise HTTPException(
             status_code=404,
-            detail=f"Device {device_id} not found"
+            detail=f"USB device {device_id} not found"
+        )
+
+    serial = usb_device.get('serial')
+    if not serial or serial == 'N/A':
+        raise HTTPException(
+            status_code=400,
+            detail=f"Device {device_id} has no serial number. Make sure USB debugging is enabled."
+        )
+
+    adb_devices = await ADBManager.get_connected_devices()
+    adb_device_exists = any(d['id'] == serial for d in adb_devices)
+
+    if not adb_device_exists:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Device {serial} not connected via ADB. Please enable USB debugging and authorize this computer."
         )
 
     import asyncio
-    asyncio.create_task(flash_service.flash_device_complete(device_id, os_url))
+    asyncio.create_task(flash_service.flash_device_complete(serial, os_url))
 
     return {
         "success": True,
-        "message": f"Flashing started for device {device_id}"
+        "message": f"Flashing started for device {serial}"
     }
 
 @router.get("/{device_id}/flash/status")
