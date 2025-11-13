@@ -1,18 +1,33 @@
 import React, { useState, useEffect } from 'react'
 import DeviceList from '../components/DeviceList'
 import DeviceTiles from '../components/DeviceTiles'
+import FlashProgress from '../components/FlashProgress'
 
 function Devices() {
   const [devices, setDevices] = useState([])
   const [viewMode, setViewMode] = useState('tiles')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [flashingDevice, setFlashingDevice] = useState(null)
+  const [flashStatus, setFlashStatus] = useState(null)
 
   useEffect(() => {
     fetchDevices()
     const interval = setInterval(fetchDevices, 5000)
     return () => clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    let statusInterval
+    if (flashingDevice) {
+      statusInterval = setInterval(() => {
+        fetchFlashStatus(flashingDevice)
+      }, 2000)
+    }
+    return () => {
+      if (statusInterval) clearInterval(statusInterval)
+    }
+  }, [flashingDevice])
 
   const fetchDevices = async () => {
     try {
@@ -28,6 +43,25 @@ function Devices() {
     }
   }
 
+  const fetchFlashStatus = async (deviceId) => {
+    try {
+      const response = await fetch(`/api/devices/${deviceId}/flash/status`)
+      if (!response.ok) return
+      const data = await response.json()
+      setFlashStatus(data)
+
+      if (data.status === 'completed' || data.status === 'error') {
+        setTimeout(() => {
+          if (data.status === 'completed') {
+            fetchDevices()
+          }
+        }, 1000)
+      }
+    } catch (err) {
+      console.error('Error fetching flash status:', err)
+    }
+  }
+
   const handleFlashDevice = async (deviceId) => {
     if (!confirm(`Are you sure you want to flash device ${deviceId}?`)) return
 
@@ -35,13 +69,22 @@ function Devices() {
       const response = await fetch(`/api/devices/${deviceId}/flash`, {
         method: 'POST'
       })
-      if (!response.ok) throw new Error('Failed to start flashing')
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.detail || 'Failed to start flashing')
+      }
       const data = await response.json()
-      alert(data.message || 'Flashing started successfully')
-      fetchDevices()
+      setFlashingDevice(deviceId)
+      setFlashStatus({ status: 'starting', progress: 0, message: 'Starting flash process...' })
     } catch (err) {
       alert(`Error: ${err.message}`)
     }
+  }
+
+  const handleCloseProgress = () => {
+    setFlashingDevice(null)
+    setFlashStatus(null)
+    fetchDevices()
   }
 
   return (
@@ -77,6 +120,14 @@ function Devices() {
         ) : (
           <DeviceTiles devices={devices} onFlash={handleFlashDevice} />
         )
+      )}
+
+      {flashingDevice && flashStatus && (
+        <FlashProgress
+          deviceId={flashingDevice}
+          status={flashStatus}
+          onClose={handleCloseProgress}
+        />
       )}
     </div>
   )
