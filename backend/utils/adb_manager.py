@@ -6,19 +6,40 @@ class ADBManager:
     @staticmethod
     async def start_adb_server():
         try:
+            kill_result = await asyncio.create_subprocess_exec(
+                'adb', 'kill-server',
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await kill_result.communicate()
+
+            await asyncio.sleep(1)
+
             result = await asyncio.create_subprocess_exec(
                 'adb', 'start-server',
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            await result.communicate()
-            print("ADB server started")
+            stdout, stderr = await result.communicate()
+            print(f"ADB server started - stdout: {stdout.decode()}, stderr: {stderr.decode()}")
         except Exception as e:
             print(f"Error starting ADB server: {e}")
 
     @staticmethod
     async def get_connected_devices() -> List[Dict[str, str]]:
         try:
+            import os
+            print(f"Running as user: {os.getuid()}")
+
+            ps_result = await asyncio.create_subprocess_exec(
+                'ps', 'aux',
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            ps_stdout, _ = await ps_result.communicate()
+            adb_processes = [line for line in ps_stdout.decode().split('\n') if 'adb' in line.lower()]
+            print(f"ADB processes: {adb_processes}")
+
             await ADBManager.start_adb_server()
 
             result = await asyncio.create_subprocess_exec(
