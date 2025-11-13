@@ -31,10 +31,8 @@ if [ ! -d "venv" ]; then
     python3.11 -m venv venv
 fi
 
-source venv/bin/activate
-
 echo "Installing Python dependencies..."
-pip install -r backend/requirements.txt
+venv/bin/pip install -r backend/requirements.txt
 
 echo "Starting backend server..."
 echo "Application will be accessible at http://localhost"
