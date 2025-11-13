@@ -3,6 +3,38 @@ import re
 from typing import List, Dict
 
 class USBManager:
+    MOBILE_DEVICE_KEYWORDS = [
+        'samsung', 'galaxy', 'mediatek', 'qualcomm', 'android',
+        'phone', 'tablet', 'mobile', 'mtp', 'adb', 'fastboot',
+        'xiaomi', 'huawei', 'oppo', 'vivo', 'oneplus', 'lg',
+        'motorola', 'google', 'pixel', 'nexus', 'htc', 'sony',
+        'asus', 'lenovo', 'nokia', 'realme', 'tecno', 'infinix',
+        'zte', 'alcatel', 'blackberry', 'meizu', 'cyrus'
+    ]
+
+    EXCLUDE_KEYWORDS = [
+        'root hub', 'keyboard', 'mouse', 'hub', 'virtual hub',
+        'ethernet', 'bluetooth', 'audio', 'webcam', 'camera'
+    ]
+
+    @staticmethod
+    def is_mobile_device(description: str, vendor_id: str) -> bool:
+        description_lower = description.lower()
+
+        for exclude in USBManager.EXCLUDE_KEYWORDS:
+            if exclude in description_lower:
+                return False
+
+        for keyword in USBManager.MOBILE_DEVICE_KEYWORDS:
+            if keyword in description_lower:
+                return True
+
+        known_mobile_vendors = ['04e8', '0e8d', '2717', '18d1', '2a70']
+        if vendor_id in known_mobile_vendors:
+            return True
+
+        return False
+
     @staticmethod
     async def get_connected_tablets() -> List[Dict[str, str]]:
         try:
@@ -25,18 +57,19 @@ class USBManager:
                 if match:
                     bus, device, vendor_id, product_id, description = match.groups()
 
-                    device_info = {
-                        'id': f"{bus}-{device}",
-                        'bus': bus,
-                        'device': device,
-                        'vendor_id': vendor_id,
-                        'product_id': product_id,
-                        'description': description.strip(),
-                        'status': 'connected'
-                    }
-                    devices.append(device_info)
+                    if USBManager.is_mobile_device(description, vendor_id):
+                        device_info = {
+                            'id': f"{bus}-{device}",
+                            'bus': bus,
+                            'device': device,
+                            'vendor_id': vendor_id,
+                            'product_id': product_id,
+                            'description': description.strip(),
+                            'status': 'connected'
+                        }
+                        devices.append(device_info)
 
-            print(f"Total USB devices found: {len(devices)}")
+            print(f"Total mobile devices found: {len(devices)}")
             return devices
 
         except Exception as e:
