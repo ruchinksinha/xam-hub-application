@@ -28,7 +28,7 @@ cd ..
 
 echo "Setting up Python virtual environment..."
 if [ ! -d "venv" ]; then
-    python3.11 -m venv venv
+    python3.12 -m venv venv
 fi
 
 echo "Installing Python dependencies..."
