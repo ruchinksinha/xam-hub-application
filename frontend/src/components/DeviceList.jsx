@@ -8,6 +8,7 @@ function DeviceList({ devices, onFlash }) {
           <tr>
             <th>Bus</th>
             <th>Device</th>
+            <th>Serial Number</th>
             <th>Vendor ID</th>
             <th>Product ID</th>
             <th>Description</th>
@@ -20,6 +21,7 @@ function DeviceList({ devices, onFlash }) {
             <tr key={device.id}>
               <td>{device.bus}</td>
               <td>{device.device}</td>
+              <td>{device.serial || 'N/A'}</td>
               <td>{device.vendor_id}</td>
               <td>{device.product_id}</td>
               <td>{device.description}</td>

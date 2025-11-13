@@ -36,6 +36,31 @@ class USBManager:
         return False
 
     @staticmethod
+    async def get_serial_number(bus: str, device: str) -> str:
+        try:
+            result = await asyncio.create_subprocess_exec(
+                'lsusb', '-v', '-s', f"{bus}:{device}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await result.communicate()
+
+            if result.returncode != 0:
+                return 'N/A'
+
+            content = stdout.decode()
+            serial_match = re.search(r'iSerial\s+\d+\s+(.+)', content)
+            if serial_match:
+                serial = serial_match.group(1).strip()
+                return serial if serial else 'N/A'
+
+            return 'N/A'
+
+        except Exception as e:
+            print(f"Error getting serial number: {e}")
+            return 'N/A'
+
+    @staticmethod
     async def get_connected_tablets() -> List[Dict[str, str]]:
         try:
             result = await asyncio.create_subprocess_exec(
@@ -52,22 +77,28 @@ class USBManager:
             devices = []
             lines = stdout.decode().strip().split('\n')
 
+            mobile_devices = []
             for line in lines:
                 match = re.match(r'Bus (\d+) Device (\d+): ID ([0-9a-f]{4}):([0-9a-f]{4}) (.+)', line)
                 if match:
                     bus, device, vendor_id, product_id, description = match.groups()
 
                     if USBManager.is_mobile_device(description, vendor_id):
-                        device_info = {
-                            'id': f"{bus}-{device}",
-                            'bus': bus,
-                            'device': device,
-                            'vendor_id': vendor_id,
-                            'product_id': product_id,
-                            'description': description.strip(),
-                            'status': 'connected'
-                        }
-                        devices.append(device_info)
+                        mobile_devices.append((bus, device, vendor_id, product_id, description))
+
+            for bus, device, vendor_id, product_id, description in mobile_devices:
+                serial = await USBManager.get_serial_number(bus, device)
+                device_info = {
+                    'id': f"{bus}-{device}",
+                    'bus': bus,
+                    'device': device,
+                    'vendor_id': vendor_id,
+                    'product_id': product_id,
+                    'description': description.strip(),
+                    'serial': serial,
+                    'status': 'connected'
+                }
+                devices.append(device_info)
 
             print(f"Total mobile devices found: {len(devices)}")
             return devices
