@@ -5,9 +5,10 @@ function DeviceTiles({ devices, onFlash }) {
     <div className="device-tiles">
       {devices.map((device) => (
         <div key={device.id} className="device-tile">
-          <div className="device-icon">📱</div>
-          <h3>{device.model || 'Unknown Device'}</h3>
-          <p className="device-id">ID: {device.id}</p>
+          <div className="device-icon">💻</div>
+          <h3>{device.description}</h3>
+          <p className="device-id">Bus {device.bus} - Device {device.device}</p>
+          <p className="device-vendor">Vendor: {device.vendor_id} | Product: {device.product_id}</p>
           <span className={`status ${device.status}`}>
             {device.status}
           </span>

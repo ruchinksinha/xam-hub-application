@@ -6,8 +6,11 @@ function DeviceList({ devices, onFlash }) {
       <table>
         <thead>
           <tr>
-            <th>Device ID</th>
-            <th>Model</th>
+            <th>Bus</th>
+            <th>Device</th>
+            <th>Vendor ID</th>
+            <th>Product ID</th>
+            <th>Description</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
@@ -15,8 +18,11 @@ function DeviceList({ devices, onFlash }) {
         <tbody>
           {devices.map((device) => (
             <tr key={device.id}>
-              <td>{device.id}</td>
-              <td>{device.model || 'Unknown'}</td>
+              <td>{device.bus}</td>
+              <td>{device.device}</td>
+              <td>{device.vendor_id}</td>
+              <td>{device.product_id}</td>
+              <td>{device.description}</td>
               <td>
                 <span className={`status ${device.status}`}>
                   {device.status}
