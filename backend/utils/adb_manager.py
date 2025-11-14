@@ -3,44 +3,45 @@ import asyncio
 from typing import List, Dict, Optional
 
 class ADBManager:
+    _server_started = False
+
     @staticmethod
-    async def start_adb_server():
+    async def ensure_adb_server():
+        """Ensure ADB server is running without killing existing instances"""
+        if ADBManager._server_started:
+            return
+
         try:
-            kill_result = await asyncio.create_subprocess_exec(
-                'adb', 'kill-server',
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            await kill_result.communicate()
-
-            await asyncio.sleep(1)
-
+            # Just check if server is running, don't kill it
             result = await asyncio.create_subprocess_exec(
-                'adb', 'start-server',
+                'adb', 'devices',
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await result.communicate()
-            print(f"ADB server started - stdout: {stdout.decode()}, stderr: {stderr.decode()}")
+
+            # If this succeeds, server is running
+            if result.returncode == 0:
+                ADBManager._server_started = True
+                print(f"ADB server already running")
+            else:
+                # Only start if it's not running
+                start_result = await asyncio.create_subprocess_exec(
+                    'adb', 'start-server',
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                await start_result.communicate()
+                ADBManager._server_started = True
+                print(f"ADB server started")
         except Exception as e:
-            print(f"Error starting ADB server: {e}")
+            print(f"Error ensuring ADB server: {e}")
 
     @staticmethod
     async def get_connected_devices() -> List[Dict[str, str]]:
         try:
-            import os
-            print(f"Running as user: {os.getuid()}")
-
-            ps_result = await asyncio.create_subprocess_exec(
-                'ps', 'aux',
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            ps_stdout, _ = await ps_result.communicate()
-            adb_processes = [line for line in ps_stdout.decode().split('\n') if 'adb' in line.lower()]
-            print(f"ADB processes: {adb_processes}")
-
-            await ADBManager.start_adb_server()
+            # Ensure ADB server is running (won't restart if already running)
+            await ADBManager.ensure_adb_server()
 
             result = await asyncio.create_subprocess_exec(
                 'adb', 'devices', '-l',
@@ -49,26 +50,18 @@ class ADBManager:
             )
             stdout, stderr = await result.communicate()
 
-            print(f"ADB return code: {result.returncode}")
-            print(f"ADB stdout: {stdout.decode()}")
-            print(f"ADB stderr: {stderr.decode()}")
-
             if result.returncode != 0:
                 print("ADB command failed")
                 return []
 
             devices = []
             lines = stdout.decode().strip().split('\n')[1:]
-            print(f"Processing {len(lines)} lines")
 
             for line in lines:
-                print(f"Processing line: '{line}'")
                 if not line.strip() or 'offline' in line:
-                    print(f"Skipping line (empty or offline)")
                     continue
 
                 parts = line.split()
-                print(f"Parts: {parts}")
                 if len(parts) >= 2:
                     device_id = parts[0]
                     model = 'Unknown'
@@ -83,10 +76,8 @@ class ADBManager:
                         'model': model,
                         'status': 'online'
                     }
-                    print(f"Adding device: {device_info}")
                     devices.append(device_info)
 
-            print(f"Total devices found: {len(devices)}")
             return devices
         except Exception as e:
             print(f"Error getting devices: {e}")
