@@ -3,7 +3,7 @@ from pathlib import Path
 import os
 import aiohttp
 import asyncio
-from config.settings import settings
+from backend.config.settings import settings
 
 router = APIRouter()
 
