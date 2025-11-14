@@ -17,8 +17,12 @@ class FlashService:
         """Get consistent filename for OS image"""
         url_hash = hashlib.md5(os_url.encode()).hexdigest()[:8]
         filename = os_url.split('/')[-1]
+
+        # Keep original extension if it's a supported format
         if not filename.endswith(('.zip', '.img')):
-            filename = f"lineage_{url_hash}.img"
+            # Default to .zip for LineageOS (most common format)
+            filename = f"lineage_{url_hash}.zip"
+
         return filename
 
     def check_os_cached(self, os_url: str) -> Tuple[bool, Optional[str]]:
@@ -93,17 +97,17 @@ class FlashService:
             }
             raise
 
-    async def reboot_to_bootloader(self, device_id: str) -> bool:
-        """Reboot device to bootloader mode"""
+    async def reboot_to_recovery(self, device_id: str) -> bool:
+        """Reboot device to recovery mode"""
         try:
             self.flash_status[device_id] = {
                 'status': 'rebooting',
                 'progress': 30,
-                'message': 'Rebooting to bootloader mode...'
+                'message': 'Rebooting to recovery mode...'
             }
 
             result = await asyncio.create_subprocess_exec(
-                'adb', '-s', device_id, 'reboot', 'bootloader',
+                'adb', '-s', device_id, 'reboot', 'recovery',
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
@@ -114,7 +118,8 @@ class FlashService:
             if result.returncode != 0 and not ('daemon started successfully' in stderr_text or 'daemon not running' in stderr_text):
                 raise Exception(f"Failed to reboot: {stderr_text}")
 
-            await asyncio.sleep(10)
+            # Wait longer for recovery to fully boot
+            await asyncio.sleep(20)
             return True
         except Exception as e:
             error_detail = str(e)
@@ -130,92 +135,61 @@ class FlashService:
             }
             raise
 
-    async def get_partition_name(self, device_id: str) -> str:
-        """Detect the correct partition name for the device"""
-        try:
-            # List partitions to find the correct one
-            result = await asyncio.create_subprocess_exec(
-                'fastboot', '-s', device_id, 'getvar', 'all',
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await result.communicate()
-
-            output = stdout.decode() + stderr.decode()
-
-            # Check for common partition names
-            if 'super' in output.lower():
-                return 'super'
-            elif 'system_a' in output.lower():
-                return 'system_a'
-            elif 'system' in output.lower():
-                return 'system'
-            else:
-                # Default to super for modern devices
-                return 'super'
-        except Exception as e:
-            print(f"Error detecting partition: {e}")
-            return 'super'
-
-    async def flash_image_fastboot(self, device_id: str, image_path: str) -> bool:
-        """Flash image using fastboot"""
+    async def sideload_via_recovery(self, device_id: str, image_path: str) -> bool:
+        """Sideload image via ADB in recovery mode"""
         try:
             self.flash_status[device_id] = {
-                'status': 'detecting_partition',
-                'progress': 40,
-                'message': 'Detecting device partition...'
-            }
-
-            # Detect the correct partition name
-            partition_name = await self.get_partition_name(device_id)
-
-            self.flash_status[device_id] = {
-                'status': 'flashing',
+                'status': 'preparing_sideload',
                 'progress': 50,
-                'message': f'Flashing OS image to {partition_name} partition...'
+                'message': 'Preparing to sideload OS image...'
             }
 
-            # Flash the image to the detected partition
+            # Wait for device to be in sideload mode
+            await asyncio.sleep(5)
+
+            self.flash_status[device_id] = {
+                'status': 'sideloading',
+                'progress': 60,
+                'message': 'Sideloading OS image (this may take several minutes)...'
+            }
+
+            # Use adb sideload to flash the image
             result = await asyncio.create_subprocess_exec(
-                'fastboot', '-s', device_id, 'flash', partition_name, image_path,
+                'adb', 'sideload', image_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await result.communicate()
 
-            stderr_text = stderr.decode()
             stdout_text = stdout.decode()
+            stderr_text = stderr.decode()
 
-            # Check for actual errors (not warnings)
-            if result.returncode != 0 and 'FAILED' in stderr_text:
-                raise Exception(f"Failed to flash image: {stderr_text}")
+            print(f"Sideload stdout: {stdout_text}")
+            print(f"Sideload stderr: {stderr_text}")
+
+            # Sideload returns 1 even on success sometimes, check output
+            if 'failed' in stderr_text.lower() or 'error' in stderr_text.lower():
+                if 'closed' not in stderr_text.lower():  # "closed" is normal after successful sideload
+                    raise Exception(f"Sideload failed: {stderr_text}")
 
             self.flash_status[device_id] = {
                 'status': 'rebooting',
                 'progress': 90,
-                'message': 'Rebooting device...'
+                'message': 'Installation complete. Rebooting device...'
             }
 
-            # Reboot device
-            result = await asyncio.create_subprocess_exec(
-                'fastboot', '-s', device_id, 'reboot',
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await result.communicate()
-
-            await asyncio.sleep(5)
+            await asyncio.sleep(10)
 
             return True
         except Exception as e:
             error_detail = str(e)
             error_trace = traceback.format_exc()
-            print(f"Flash error for {device_id}: {error_detail}")
+            print(f"Sideload error for {device_id}: {error_detail}")
             print(f"Traceback: {error_trace}")
             self.flash_status[device_id] = {
                 'status': 'error',
                 'progress': 70,
-                'message': f'Flash failed: {error_detail}',
+                'message': f'Sideload failed: {error_detail}',
                 'error_detail': error_detail,
                 'error_trace': error_trace
             }
@@ -284,13 +258,11 @@ class FlashService:
                 'message': 'Starting flash process...'
             }
 
-            # Check if image is .img format (use fastboot) or .zip (use TWRP)
-            if image_path.endswith('.img'):
-                await self.reboot_to_bootloader(device_id)
-                await self.flash_image_fastboot(device_id, image_path)
-            else:
-                # For .zip files, we'd use TWRP recovery (not implemented yet)
-                raise Exception("Only .img format is currently supported")
+            # Reboot to recovery mode for sideloading
+            await self.reboot_to_recovery(device_id)
+
+            # Sideload the image file
+            await self.sideload_via_recovery(device_id, image_path)
 
             self.flash_status[device_id] = {
                 'status': 'completed',
