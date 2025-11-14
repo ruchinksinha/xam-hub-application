@@ -117,3 +117,8 @@ async def get_flash_status(device_id: str):
 
     status = flash_service.get_flash_status(device_id)
     return status
+
+@router.get("/{serial}/flash/status-by-serial")
+async def get_flash_status_by_serial(serial: str):
+    status = flash_service.get_flash_status(serial)
+    return status

@@ -9,6 +9,7 @@ function Devices() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [flashingDevice, setFlashingDevice] = useState(null)
+  const [flashingSerial, setFlashingSerial] = useState(null)
   const [flashStatus, setFlashStatus] = useState(null)
   const [osAvailable, setOsAvailable] = useState(false)
 
@@ -21,15 +22,15 @@ function Devices() {
 
   useEffect(() => {
     let statusInterval
-    if (flashingDevice) {
+    if (flashingSerial) {
       statusInterval = setInterval(() => {
-        fetchFlashStatus(flashingDevice)
+        fetchFlashStatus(flashingSerial)
       }, 2000)
     }
     return () => {
       if (statusInterval) clearInterval(statusInterval)
     }
-  }, [flashingDevice])
+  }, [flashingSerial])
 
   const checkOsAvailability = async () => {
     try {
@@ -57,9 +58,9 @@ function Devices() {
     }
   }
 
-  const fetchFlashStatus = async (deviceId) => {
+  const fetchFlashStatus = async (serial) => {
     try {
-      const response = await fetch(`/api/devices/${deviceId}/flash/status`)
+      const response = await fetch(`/api/devices/${serial}/flash/status-by-serial`)
       if (!response.ok) return
       const data = await response.json()
       setFlashStatus(data)
@@ -87,6 +88,7 @@ function Devices() {
       }
       const data = await response.json()
       setFlashingDevice(deviceId)
+      setFlashingSerial(data.serial)
       setFlashStatus({ status: 'starting', progress: 0, message: 'Preparing flash process...' })
     } catch (err) {
       alert(`Error: ${err.message}`)
@@ -113,6 +115,7 @@ function Devices() {
 
   const handleCloseProgress = () => {
     setFlashingDevice(null)
+    setFlashingSerial(null)
     setFlashStatus(null)
     fetchDevices()
   }
