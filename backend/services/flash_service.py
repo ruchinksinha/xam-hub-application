@@ -17,8 +17,8 @@ class FlashService:
         """Get consistent filename for OS image"""
         url_hash = hashlib.md5(os_url.encode()).hexdigest()[:8]
         filename = os_url.split('/')[-1]
-        if not filename.endswith('.zip'):
-            filename = f"lineage_{url_hash}.zip"
+        if not filename.endswith(('.zip', '.img')):
+            filename = f"lineage_{url_hash}.img"
         return filename
 
     def check_os_cached(self, os_url: str) -> Tuple[bool, Optional[str]]:
@@ -93,17 +93,17 @@ class FlashService:
             }
             raise
 
-    async def reboot_to_recovery(self, device_id: str) -> bool:
-        """Reboot device to recovery mode"""
+    async def reboot_to_bootloader(self, device_id: str) -> bool:
+        """Reboot device to bootloader mode"""
         try:
             self.flash_status[device_id] = {
                 'status': 'rebooting',
                 'progress': 30,
-                'message': 'Rebooting to recovery mode...'
+                'message': 'Rebooting to bootloader mode...'
             }
 
             result = await asyncio.create_subprocess_exec(
-                'adb', '-s', device_id, 'reboot', 'recovery',
+                'adb', '-s', device_id, 'reboot', 'bootloader',
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
@@ -114,7 +114,7 @@ class FlashService:
             if result.returncode != 0 and not ('daemon started successfully' in stderr_text or 'daemon not running' in stderr_text):
                 raise Exception(f"Failed to reboot: {stderr_text}")
 
-            await asyncio.sleep(15)
+            await asyncio.sleep(10)
             return True
         except Exception as e:
             error_detail = str(e)
@@ -130,37 +130,35 @@ class FlashService:
             }
             raise
 
-    async def push_and_flash(self, device_id: str, image_path: str) -> bool:
-        """Push image to device and flash it"""
+    async def flash_image_fastboot(self, device_id: str, image_path: str) -> bool:
+        """Flash image using fastboot"""
         try:
             self.flash_status[device_id] = {
-                'status': 'pushing',
+                'status': 'flashing',
                 'progress': 50,
-                'message': 'Pushing OS image to device...'
+                'message': 'Flashing OS image via fastboot...'
             }
 
+            # Flash the system image
             result = await asyncio.create_subprocess_exec(
-                'adb', '-s', device_id, 'push', image_path, '/sdcard/',
+                'fastboot', '-s', device_id, 'flash', 'system', image_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await result.communicate()
 
-            stderr_text = stderr.decode()
-            # ADB daemon startup messages are not errors
-            if result.returncode != 0 and not ('daemon started successfully' in stderr_text or 'daemon not running' in stderr_text):
-                raise Exception(f"Failed to push image: {stderr_text}")
+            if result.returncode != 0:
+                raise Exception(f"Failed to flash image: {stderr.decode()}")
 
             self.flash_status[device_id] = {
-                'status': 'flashing',
-                'progress': 70,
-                'message': 'Flashing OS image...'
+                'status': 'rebooting',
+                'progress': 90,
+                'message': 'Rebooting device...'
             }
 
-            image_filename = Path(image_path).name
+            # Reboot device
             result = await asyncio.create_subprocess_exec(
-                'adb', '-s', device_id, 'shell',
-                'twrp', 'install', f'/sdcard/{image_filename}',
+                'fastboot', '-s', device_id, 'reboot',
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
@@ -172,7 +170,7 @@ class FlashService:
         except Exception as e:
             error_detail = str(e)
             error_trace = traceback.format_exc()
-            print(f"Push/Flash error for {device_id}: {error_detail}")
+            print(f"Flash error for {device_id}: {error_detail}")
             print(f"Traceback: {error_trace}")
             self.flash_status[device_id] = {
                 'status': 'error',
@@ -246,9 +244,13 @@ class FlashService:
                 'message': 'Starting flash process...'
             }
 
-            await self.reboot_to_recovery(device_id)
-
-            await self.push_and_flash(device_id, image_path)
+            # Check if image is .img format (use fastboot) or .zip (use TWRP)
+            if image_path.endswith('.img'):
+                await self.reboot_to_bootloader(device_id)
+                await self.flash_image_fastboot(device_id, image_path)
+            else:
+                # For .zip files, we'd use TWRP recovery (not implemented yet)
+                raise Exception("Only .img format is currently supported")
 
             self.flash_status[device_id] = {
                 'status': 'completed',
