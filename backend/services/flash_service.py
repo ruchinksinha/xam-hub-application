@@ -109,8 +109,10 @@ class FlashService:
             )
             stdout, stderr = await result.communicate()
 
-            if result.returncode != 0:
-                raise Exception(f"Failed to reboot: {stderr.decode()}")
+            stderr_text = stderr.decode()
+            # ADB daemon startup messages are not errors
+            if result.returncode != 0 and not ('daemon started successfully' in stderr_text or 'daemon not running' in stderr_text):
+                raise Exception(f"Failed to reboot: {stderr_text}")
 
             await asyncio.sleep(15)
             return True
@@ -144,8 +146,10 @@ class FlashService:
             )
             stdout, stderr = await result.communicate()
 
-            if result.returncode != 0:
-                raise Exception(f"Failed to push image: {stderr.decode()}")
+            stderr_text = stderr.decode()
+            # ADB daemon startup messages are not errors
+            if result.returncode != 0 and not ('daemon started successfully' in stderr_text or 'daemon not running' in stderr_text):
+                raise Exception(f"Failed to push image: {stderr_text}")
 
             self.flash_status[device_id] = {
                 'status': 'flashing',
