@@ -19,7 +19,7 @@ async def get_device_details(bus: str, device: str):
 @router.get("/os/check")
 async def check_os_availability():
     settings = get_settings()
-    os_url = settings.lineage_os_url
+    os_url = settings.LINEAGE_OS_URL
 
     if not os_url:
         raise HTTPException(
@@ -33,7 +33,7 @@ async def check_os_availability():
 @router.post("/{device_id}/flash/prepare")
 async def prepare_flash(device_id: str):
     settings = get_settings()
-    os_url = settings.lineage_os_url
+    os_url = settings.LINEAGE_OS_URL
 
     if not os_url:
         raise HTTPException(
@@ -94,7 +94,7 @@ async def confirm_flash(device_id: str):
         )
 
     settings = get_settings()
-    os_url = settings.lineage_os_url
+    os_url = settings.LINEAGE_OS_URL
 
     import asyncio
     asyncio.create_task(flash_service.flash_device_complete(serial, os_url, skip_download=True))
