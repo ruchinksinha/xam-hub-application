@@ -10,9 +10,11 @@ function Devices() {
   const [error, setError] = useState(null)
   const [flashingDevice, setFlashingDevice] = useState(null)
   const [flashStatus, setFlashStatus] = useState(null)
+  const [osAvailable, setOsAvailable] = useState(false)
 
   useEffect(() => {
     fetchDevices()
+    checkOsAvailability()
     const interval = setInterval(fetchDevices, 5000)
     return () => clearInterval(interval)
   }, [])
@@ -28,6 +30,18 @@ function Devices() {
       if (statusInterval) clearInterval(statusInterval)
     }
   }, [flashingDevice])
+
+  const checkOsAvailability = async () => {
+    try {
+      const response = await fetch('/api/devices/os/check')
+      if (response.ok) {
+        const data = await response.json()
+        setOsAvailable(data.available || false)
+      }
+    } catch (err) {
+      console.error('Error checking OS availability:', err)
+    }
+  }
 
   const fetchDevices = async () => {
     try {
@@ -63,10 +77,8 @@ function Devices() {
   }
 
   const handleFlashDevice = async (deviceId) => {
-    if (!confirm(`Are you sure you want to flash device ${deviceId}?`)) return
-
     try {
-      const response = await fetch(`/api/devices/${deviceId}/flash`, {
+      const response = await fetch(`/api/devices/${deviceId}/flash/prepare`, {
         method: 'POST'
       })
       if (!response.ok) {
@@ -75,9 +87,27 @@ function Devices() {
       }
       const data = await response.json()
       setFlashingDevice(deviceId)
-      setFlashStatus({ status: 'starting', progress: 0, message: 'Starting flash process...' })
+      setFlashStatus({ status: 'starting', progress: 0, message: 'Preparing flash process...' })
     } catch (err) {
       alert(`Error: ${err.message}`)
+    }
+  }
+
+  const handleConfirmFlash = async () => {
+    if (!flashingDevice) return
+
+    try {
+      const response = await fetch(`/api/devices/${flashingDevice}/flash/confirm`, {
+        method: 'POST'
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.detail || 'Failed to confirm flash')
+      }
+      setFlashStatus({ status: 'flashing_started', progress: 30, message: 'Flash confirmed. Starting process...' })
+    } catch (err) {
+      alert(`Error: ${err.message}`)
+      setFlashStatus({ status: 'error', progress: 0, message: err.message })
     }
   }
 
@@ -115,11 +145,18 @@ function Devices() {
       )}
 
       {!loading && !error && devices.length > 0 && (
-        viewMode === 'list' ? (
-          <DeviceList devices={devices} onFlash={handleFlashDevice} />
-        ) : (
-          <DeviceTiles devices={devices} onFlash={handleFlashDevice} />
-        )
+        <>
+          {osAvailable && (
+            <div className="os-available-banner">
+              ✓ LineageOS image is available and ready for flashing
+            </div>
+          )}
+          {viewMode === 'list' ? (
+            <DeviceList devices={devices} onFlash={handleFlashDevice} />
+          ) : (
+            <DeviceTiles devices={devices} onFlash={handleFlashDevice} />
+          )}
+        </>
       )}
 
       {flashingDevice && flashStatus && (
@@ -127,6 +164,7 @@ function Devices() {
           deviceId={flashingDevice}
           status={flashStatus}
           onClose={handleCloseProgress}
+          onConfirm={handleConfirmFlash}
         />
       )}
     </div>

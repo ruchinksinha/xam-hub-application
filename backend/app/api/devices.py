@@ -16,8 +16,22 @@ async def get_device_details(bus: str, device: str):
     details = await USBManager.get_device_details(bus, device)
     return {"details": details}
 
-@router.post("/{device_id}/flash")
-async def flash_device(device_id: str):
+@router.get("/os/check")
+async def check_os_availability():
+    settings = get_settings()
+    os_url = settings.lineage_os_url
+
+    if not os_url:
+        raise HTTPException(
+            status_code=500,
+            detail="Lineage OS URL not configured"
+        )
+
+    availability = flash_service.check_os_availability(os_url)
+    return availability
+
+@router.post("/{device_id}/flash/prepare")
+async def prepare_flash(device_id: str):
     settings = get_settings()
     os_url = settings.lineage_os_url
 
@@ -53,14 +67,53 @@ async def flash_device(device_id: str):
         )
 
     import asyncio
-    asyncio.create_task(flash_service.flash_device_complete(serial, os_url))
+    asyncio.create_task(flash_service.flash_device_complete(serial, os_url, skip_download=False))
 
     return {
         "success": True,
-        "message": f"Flashing started for device {serial}"
+        "message": f"Preparing flash for device {serial}",
+        "serial": serial
+    }
+
+@router.post("/{device_id}/flash/confirm")
+async def confirm_flash(device_id: str):
+    usb_devices = await USBManager.get_connected_tablets()
+    usb_device = next((d for d in usb_devices if d['id'] == device_id), None)
+
+    if not usb_device:
+        raise HTTPException(
+            status_code=404,
+            detail=f"USB device {device_id} not found"
+        )
+
+    serial = usb_device.get('serial')
+    if not serial or serial == 'N/A':
+        raise HTTPException(
+            status_code=400,
+            detail=f"Device {device_id} has no serial number."
+        )
+
+    settings = get_settings()
+    os_url = settings.lineage_os_url
+
+    import asyncio
+    asyncio.create_task(flash_service.flash_device_complete(serial, os_url, skip_download=True))
+
+    return {
+        "success": True,
+        "message": f"Flash confirmed for device {serial}"
     }
 
 @router.get("/{device_id}/flash/status")
 async def get_flash_status(device_id: str):
+    usb_devices = await USBManager.get_connected_tablets()
+    usb_device = next((d for d in usb_devices if d['id'] == device_id), None)
+
+    if usb_device:
+        serial = usb_device.get('serial')
+        if serial and serial != 'N/A':
+            status = flash_service.get_flash_status(serial)
+            return status
+
     status = flash_service.get_flash_status(device_id)
     return status
