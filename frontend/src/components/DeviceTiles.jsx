@@ -68,7 +68,7 @@ function DeviceTiles({ devices, onFlash }) {
               <h4>Enable USB Debugging</h4>
               <ol>
                 <li>Open <strong>Settings</strong> on your device</li>
-                <li>Go to <strong>About Phone</strong></li>
+                <li>Go to <strong>About Tablet</strong></li>
                 <li>Tap <strong>Build Number</strong> 7 times to enable Developer Options</li>
                 <li>Go back to <strong>Settings</strong> → <strong>Developer Options</strong></li>
                 <li>Enable <strong>USB Debugging</strong></li>
