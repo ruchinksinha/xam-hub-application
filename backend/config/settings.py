@@ -9,8 +9,11 @@ load_dotenv(dotenv_path=env_path)
 
 class Settings:
     def __init__(self):
-        self.lineage_os_url = os.getenv('LINEAGE_OS_URL', '')
+        self.LINEAGE_OS_URL = os.getenv('LINEAGE_OS_URL', '')
 
 @lru_cache()
 def get_settings():
     return Settings()
+
+# Create a global instance
+settings = get_settings()
