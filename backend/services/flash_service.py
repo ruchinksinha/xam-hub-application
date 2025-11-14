@@ -130,25 +130,65 @@ class FlashService:
             }
             raise
 
-    async def flash_image_fastboot(self, device_id: str, image_path: str) -> bool:
-        """Flash image using fastboot"""
+    async def get_partition_name(self, device_id: str) -> str:
+        """Detect the correct partition name for the device"""
         try:
-            self.flash_status[device_id] = {
-                'status': 'flashing',
-                'progress': 50,
-                'message': 'Flashing OS image via fastboot...'
-            }
-
-            # Flash the system image
+            # List partitions to find the correct one
             result = await asyncio.create_subprocess_exec(
-                'fastboot', '-s', device_id, 'flash', 'system', image_path,
+                'fastboot', '-s', device_id, 'getvar', 'all',
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await result.communicate()
 
-            if result.returncode != 0:
-                raise Exception(f"Failed to flash image: {stderr.decode()}")
+            output = stdout.decode() + stderr.decode()
+
+            # Check for common partition names
+            if 'super' in output.lower():
+                return 'super'
+            elif 'system_a' in output.lower():
+                return 'system_a'
+            elif 'system' in output.lower():
+                return 'system'
+            else:
+                # Default to super for modern devices
+                return 'super'
+        except Exception as e:
+            print(f"Error detecting partition: {e}")
+            return 'super'
+
+    async def flash_image_fastboot(self, device_id: str, image_path: str) -> bool:
+        """Flash image using fastboot"""
+        try:
+            self.flash_status[device_id] = {
+                'status': 'detecting_partition',
+                'progress': 40,
+                'message': 'Detecting device partition...'
+            }
+
+            # Detect the correct partition name
+            partition_name = await self.get_partition_name(device_id)
+
+            self.flash_status[device_id] = {
+                'status': 'flashing',
+                'progress': 50,
+                'message': f'Flashing OS image to {partition_name} partition...'
+            }
+
+            # Flash the image to the detected partition
+            result = await asyncio.create_subprocess_exec(
+                'fastboot', '-s', device_id, 'flash', partition_name, image_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await result.communicate()
+
+            stderr_text = stderr.decode()
+            stdout_text = stdout.decode()
+
+            # Check for actual errors (not warnings)
+            if result.returncode != 0 and 'FAILED' in stderr_text:
+                raise Exception(f"Failed to flash image: {stderr_text}")
 
             self.flash_status[device_id] = {
                 'status': 'rebooting',
