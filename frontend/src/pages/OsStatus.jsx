@@ -89,6 +89,25 @@ function OsStatus() {
     }
   }
 
+  const checkActiveDownloads = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/os/download/progress`)
+      if (response.ok) {
+        const data = await response.json()
+        const activeDownloads = Object.values(data.downloads || {})
+        const hasActiveDownload = activeDownloads.some(d => d.status === 'downloading')
+
+        if (hasActiveDownload) {
+          setDownloadProgress(data.downloads || {})
+          setDownloading(true)
+          pollDownloadProgress()
+        }
+      }
+    } catch (err) {
+      console.error('Error checking active downloads:', err)
+    }
+  }
+
   const pollDownloadProgress = async () => {
     const interval = setInterval(async () => {
       try {
@@ -124,6 +143,7 @@ function OsStatus() {
 
   useEffect(() => {
     fetchOsImages()
+    checkActiveDownloads()
   }, [])
 
   const activeDownload = Object.entries(downloadProgress).find(([_, progress]) => progress.status === 'downloading')
@@ -191,30 +211,55 @@ function OsStatus() {
               <tr>
                 <th>Filename</th>
                 <th>Size</th>
+                <th>Status</th>
                 <th>Downloaded</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {osImages.map((image) => (
-                <tr key={image.filename}>
-                  <td className="filename-cell">
-                    <span className="file-icon">📦</span>
-                    {image.filename}
-                  </td>
-                  <td>{formatBytes(image.size)}</td>
-                  <td>{formatDate(image.modified)}</td>
-                  <td>
-                    <button
-                      onClick={() => handleDelete(image.filename)}
-                      className="btn-delete"
-                      disabled={deleting === image.filename}
-                    >
-                      {deleting === image.filename ? 'Deleting...' : '🗑️ Delete'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {osImages.map((image) => {
+                const imageProgress = downloadProgress[image.filename]
+                const isDownloading = imageProgress?.status === 'downloading'
+                const hasError = imageProgress?.status === 'error'
+                const isComplete = !isDownloading && !hasError
+
+                return (
+                  <tr key={image.filename}>
+                    <td className="filename-cell">
+                      <span className="file-icon">📦</span>
+                      {image.filename}
+                    </td>
+                    <td>{formatBytes(image.size)}</td>
+                    <td>
+                      {isDownloading && (
+                        <span className="status-badge status-downloading">
+                          ⏳ Downloading {imageProgress.progress}%
+                        </span>
+                      )}
+                      {hasError && (
+                        <span className="status-badge status-error" title={imageProgress.error}>
+                          ❌ Failed
+                        </span>
+                      )}
+                      {isComplete && (
+                        <span className="status-badge status-complete">
+                          ✅ Complete
+                        </span>
+                      )}
+                    </td>
+                    <td>{formatDate(image.modified)}</td>
+                    <td>
+                      <button
+                        onClick={() => handleDelete(image.filename)}
+                        className="btn-delete"
+                        disabled={deleting === image.filename || isDownloading}
+                      >
+                        {deleting === image.filename ? 'Deleting...' : '🗑️ Delete'}
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
