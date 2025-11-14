@@ -3,10 +3,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 from backend.app.api.devices import router as devices_router
+from backend.app.api.os_images import router as os_images_router
 
 app = FastAPI()
 
 app.include_router(devices_router)
+app.include_router(os_images_router)
 
 frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
 
