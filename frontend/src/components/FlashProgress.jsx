@@ -121,6 +121,19 @@ function FlashProgress({ deviceId, status, onClose, onConfirm }) {
               </span>
             </div>
           </div>
+
+          {status.status === 'error' && status.error_detail && (
+            <div className="error-details">
+              <h4>Error Details</h4>
+              <p className="error-message">{status.error_detail}</p>
+              {status.error_trace && (
+                <details className="error-trace">
+                  <summary>Technical Details (Click to expand)</summary>
+                  <pre>{status.error_trace}</pre>
+                </details>
+              )}
+            </div>
+          )}
         </div>
 
         {isAwaitingConfirmation && (

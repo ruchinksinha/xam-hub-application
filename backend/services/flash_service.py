@@ -2,6 +2,7 @@ import os
 import aiohttp
 import asyncio
 import hashlib
+import traceback
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -79,10 +80,16 @@ class FlashService:
             self.flash_status[device_id]['message'] = 'Download completed'
             return str(file_path)
         except Exception as e:
+            error_detail = str(e)
+            error_trace = traceback.format_exc()
+            print(f"Download error for {device_id}: {error_detail}")
+            print(f"Traceback: {error_trace}")
             self.flash_status[device_id] = {
                 'status': 'error',
                 'progress': 0,
-                'message': f'Download failed: {str(e)}'
+                'message': f'Download failed: {error_detail}',
+                'error_detail': error_detail,
+                'error_trace': error_trace
             }
             raise
 
@@ -108,10 +115,16 @@ class FlashService:
             await asyncio.sleep(15)
             return True
         except Exception as e:
+            error_detail = str(e)
+            error_trace = traceback.format_exc()
+            print(f"Reboot error for {device_id}: {error_detail}")
+            print(f"Traceback: {error_trace}")
             self.flash_status[device_id] = {
                 'status': 'error',
                 'progress': 30,
-                'message': f'Reboot failed: {str(e)}'
+                'message': f'Reboot failed: {error_detail}',
+                'error_detail': error_detail,
+                'error_trace': error_trace
             }
             raise
 
@@ -153,10 +166,16 @@ class FlashService:
 
             return True
         except Exception as e:
+            error_detail = str(e)
+            error_trace = traceback.format_exc()
+            print(f"Push/Flash error for {device_id}: {error_detail}")
+            print(f"Traceback: {error_trace}")
             self.flash_status[device_id] = {
                 'status': 'error',
                 'progress': 70,
-                'message': f'Flash failed: {str(e)}'
+                'message': f'Flash failed: {error_detail}',
+                'error_detail': error_detail,
+                'error_trace': error_trace
             }
             raise
 
@@ -238,14 +257,20 @@ class FlashService:
                 'message': 'Flash completed successfully'
             }
         except Exception as e:
+            error_detail = str(e)
+            error_trace = traceback.format_exc()
+            print(f"Complete flash error for {device_id}: {error_detail}")
+            print(f"Traceback: {error_trace}")
             self.flash_status[device_id] = {
                 'status': 'error',
                 'progress': 0,
-                'message': f'Flash failed: {str(e)}'
+                'message': f'Flash failed: {error_detail}',
+                'error_detail': error_detail,
+                'error_trace': error_trace
             }
             return {
                 'success': False,
-                'message': str(e)
+                'message': error_detail
             }
 
     def get_flash_status(self, device_id: str) -> Dict:
