@@ -6,8 +6,15 @@ from pathlib import Path
 from backend.app.api.devices import router as devices_router
 from backend.app.api.os_images import router as os_images_router
 from backend.app.api.registered_devices import router as registered_devices_router
+from backend.app.api.admin import router as admin_router
+from backend.utils.hotspot_manager import HotspotManager
 
 app = FastAPI()
+
+@app.on_event("startup")
+async def startup_event():
+    hotspot_manager = HotspotManager()
+    hotspot_manager.auto_start()
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,6 +27,7 @@ app.add_middleware(
 app.include_router(devices_router)
 app.include_router(os_images_router)
 app.include_router(registered_devices_router)
+app.include_router(admin_router)
 
 frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
 

@@ -1,0 +1,188 @@
+import subprocess
+import re
+import json
+from pathlib import Path
+
+class HotspotManager:
+    def __init__(self):
+        self.config_file = Path(__file__).parent.parent / "data" / "hotspot_config.json"
+        self._ensure_config_exists()
+
+    def _ensure_config_exists(self):
+        if not self.config_file.exists():
+            self.config_file.parent.mkdir(exist_ok=True)
+            default_config = {
+                "ssid": "AndroidFlashHub",
+                "password": "flashhub123",
+                "interface": "wlan0",
+                "auto_start": True
+            }
+            self.config_file.write_text(json.dumps(default_config, indent=2))
+
+    def _load_config(self):
+        try:
+            return json.loads(self.config_file.read_text())
+        except:
+            return {
+                "ssid": "AndroidFlashHub",
+                "password": "flashhub123",
+                "interface": "wlan0",
+                "auto_start": True
+            }
+
+    def get_status(self):
+        try:
+            result = subprocess.run(
+                ["nmcli", "connection", "show", "--active"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            active = False
+            ssid = ""
+            interface = ""
+
+            for line in result.stdout.split('\n'):
+                if 'hotspot' in line.lower() or 'ap' in line.lower():
+                    parts = [p.strip() for p in line.split() if p.strip()]
+                    if len(parts) >= 3:
+                        ssid = parts[0]
+                        interface = parts[-1]
+                        active = True
+                    break
+
+            ip_address = ""
+            if active and interface:
+                try:
+                    ip_result = subprocess.run(
+                        ["ip", "addr", "show", interface],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    ip_match = re.search(r'inet (\d+\.\d+\.\d+\.\d+)', ip_result.stdout)
+                    if ip_match:
+                        ip_address = ip_match.group(1)
+                except:
+                    pass
+
+            connected_devices = 0
+            if active:
+                try:
+                    lease_files = [
+                        "/var/lib/NetworkManager/dnsmasq-*.leases",
+                        "/var/lib/misc/dnsmasq.leases"
+                    ]
+                    for lease_pattern in lease_files:
+                        lease_result = subprocess.run(
+                            ["bash", "-c", f"cat {lease_pattern} 2>/dev/null | wc -l"],
+                            capture_output=True,
+                            text=True,
+                            timeout=5
+                        )
+                        if lease_result.returncode == 0:
+                            connected_devices = int(lease_result.stdout.strip() or "0")
+                            if connected_devices > 0:
+                                break
+                except:
+                    pass
+
+            config = self._load_config()
+            if not ssid:
+                ssid = config.get("ssid", "AndroidFlashHub")
+            if not interface:
+                interface = config.get("interface", "wlan0")
+
+            return {
+                "active": active,
+                "ssid": ssid,
+                "interface": interface,
+                "ip_address": ip_address,
+                "connected_devices": connected_devices
+            }
+
+        except Exception as e:
+            print(f"Error getting hotspot status: {e}")
+            config = self._load_config()
+            return {
+                "active": False,
+                "ssid": config.get("ssid", "AndroidFlashHub"),
+                "interface": config.get("interface", "wlan0"),
+                "ip_address": "",
+                "connected_devices": 0
+            }
+
+    def start(self):
+        try:
+            config = self._load_config()
+            ssid = config.get("ssid", "AndroidFlashHub")
+            password = config.get("password", "flashhub123")
+            interface = config.get("interface", "wlan0")
+
+            result = subprocess.run(
+                [
+                    "nmcli", "device", "wifi", "hotspot",
+                    "ifname", interface,
+                    "ssid", ssid,
+                    "password", password
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result.returncode == 0:
+                return {"success": True}
+            else:
+                return {"success": False, "error": result.stderr or "Unknown error"}
+
+        except subprocess.TimeoutExpired:
+            return {"success": False, "error": "Command timed out"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def stop(self):
+        try:
+            status = self.get_status()
+            if not status["active"]:
+                return {"success": True, "message": "Hotspot already stopped"}
+
+            interface = status.get("interface", "wlan0")
+
+            result = subprocess.run(
+                ["nmcli", "connection", "down", "id", "Hotspot"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result.returncode != 0:
+                result = subprocess.run(
+                    ["nmcli", "device", "disconnect", interface],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+
+            if result.returncode == 0:
+                return {"success": True}
+            else:
+                return {"success": False, "error": result.stderr or "Unknown error"}
+
+        except subprocess.TimeoutExpired:
+            return {"success": False, "error": "Command timed out"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def auto_start(self):
+        config = self._load_config()
+        if config.get("auto_start", True):
+            status = self.get_status()
+            if not status["active"]:
+                print("Auto-starting WiFi hotspot...")
+                result = self.start()
+                if result["success"]:
+                    print("WiFi hotspot started successfully")
+                else:
+                    print(f"Failed to start hotspot: {result.get('error')}")

@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar'
 import Devices from './pages/Devices'
 import OsStatus from './pages/OsStatus'
 import RegisteredNodes from './pages/RegisteredNodes'
+import AdminCentre from './pages/AdminCentre'
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
             <Route path="/" element={<Devices />} />
             <Route path="/os-status" element={<OsStatus />} />
             <Route path="/registered-nodes" element={<RegisteredNodes />} />
+            <Route path="/admin-centre" element={<AdminCentre />} />
           </Routes>
         </div>
       </div>
