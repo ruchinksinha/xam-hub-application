@@ -8,25 +8,63 @@ class HotspotManager:
         self.config_file = Path(__file__).parent.parent / "data" / "hotspot_config.json"
         self._ensure_config_exists()
 
+    def _detect_wireless_interface(self):
+        """Auto-detect the first available wireless interface"""
+        try:
+            result = subprocess.run(
+                ["nmcli", "-t", "-f", "DEVICE,TYPE", "device", "status"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            for line in result.stdout.split('\n'):
+                if ':wifi' in line or ':wireless' in line:
+                    interface = line.split(':')[0]
+                    if interface:
+                        return interface
+
+            # Fallback: check /sys/class/net for wireless interfaces
+            net_path = Path("/sys/class/net")
+            if net_path.exists():
+                for iface in net_path.iterdir():
+                    wireless_path = iface / "wireless"
+                    if wireless_path.exists():
+                        return iface.name
+
+            return "wlan0"
+
+        except Exception as e:
+            print(f"Error detecting wireless interface: {e}")
+            return "wlan0"
+
     def _ensure_config_exists(self):
         if not self.config_file.exists():
             self.config_file.parent.mkdir(exist_ok=True)
+            detected_interface = self._detect_wireless_interface()
             default_config = {
                 "ssid": "AndroidFlashHub",
                 "password": "flashhub123",
-                "interface": "wlan0",
+                "interface": detected_interface,
                 "auto_start": True
             }
             self.config_file.write_text(json.dumps(default_config, indent=2))
+            print(f"Created hotspot config with detected interface: {detected_interface}")
 
     def _load_config(self):
         try:
-            return json.loads(self.config_file.read_text())
+            config = json.loads(self.config_file.read_text())
+            # Auto-update interface if not set or invalid
+            if not config.get("interface"):
+                config["interface"] = self._detect_wireless_interface()
+                self.config_file.write_text(json.dumps(config, indent=2))
+            return config
         except:
+            detected_interface = self._detect_wireless_interface()
             return {
                 "ssid": "AndroidFlashHub",
                 "password": "flashhub123",
-                "interface": "wlan0",
+                "interface": detected_interface,
                 "auto_start": True
             }
 
@@ -215,6 +253,51 @@ class HotspotManager:
             return {"success": False, "error": "Command timed out"}
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    def get_config(self):
+        """Get current hotspot configuration"""
+        return self._load_config()
+
+    def update_config(self, new_config):
+        """Update hotspot configuration"""
+        try:
+            current_config = self._load_config()
+            current_config.update(new_config)
+            self.config_file.write_text(json.dumps(current_config, indent=2))
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_available_interfaces(self):
+        """Get list of available wireless interfaces"""
+        interfaces = []
+        try:
+            result = subprocess.run(
+                ["nmcli", "-t", "-f", "DEVICE,TYPE", "device", "status"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            for line in result.stdout.split('\n'):
+                if ':wifi' in line or ':wireless' in line:
+                    interface = line.split(':')[0]
+                    if interface:
+                        interfaces.append(interface)
+
+            # Also check /sys/class/net
+            net_path = Path("/sys/class/net")
+            if net_path.exists():
+                for iface in net_path.iterdir():
+                    wireless_path = iface / "wireless"
+                    if wireless_path.exists() and iface.name not in interfaces:
+                        interfaces.append(iface.name)
+
+            return interfaces if interfaces else ["wlan0"]
+
+        except Exception as e:
+            print(f"Error getting available interfaces: {e}")
+            return ["wlan0"]
 
     def auto_start(self):
         config = self._load_config()

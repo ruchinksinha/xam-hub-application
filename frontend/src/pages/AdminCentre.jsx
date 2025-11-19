@@ -10,8 +10,16 @@ export default function AdminCentre() {
     ip_address: '',
     connected_devices: 0
   });
+  const [config, setConfig] = useState({
+    ssid: '',
+    password: '',
+    interface: '',
+    auto_start: true
+  });
+  const [availableInterfaces, setAvailableInterfaces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showConfig, setShowConfig] = useState(false);
 
   const fetchHotspotStatus = async () => {
     try {
@@ -27,8 +35,24 @@ export default function AdminCentre() {
     }
   };
 
+  const fetchConfig = async () => {
+    try {
+      const [configRes, interfacesRes] = await Promise.all([
+        fetch(`${API_URL}/api/admin/hotspot-config`),
+        fetch(`${API_URL}/api/admin/available-interfaces`)
+      ]);
+      const configData = await configRes.json();
+      const interfacesData = await interfacesRes.json();
+      setConfig(configData);
+      setAvailableInterfaces(interfacesData.interfaces || []);
+    } catch (error) {
+      console.error('Failed to fetch config:', error);
+    }
+  };
+
   useEffect(() => {
     fetchHotspotStatus();
+    fetchConfig();
     const interval = setInterval(fetchHotspotStatus, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -57,6 +81,30 @@ export default function AdminCentre() {
     }
   };
 
+  const handleUpdateConfig = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/admin/hotspot-config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert('Configuration updated successfully');
+        setShowConfig(false);
+        fetchConfig();
+      } else {
+        const errorMsg = data.detail || data.error || 'Failed to update configuration';
+        alert(errorMsg);
+      }
+    } catch (error) {
+      console.error('Failed to update config:', error);
+      alert(`Error: Could not update configuration. ${error.message}`);
+    }
+  };
+
   if (loading) {
     return (
       <div className="admin-centre-page">
@@ -72,18 +120,88 @@ export default function AdminCentre() {
           <h1>Admin Centre</h1>
           <p className="subtitle">Manage server settings and WiFi hotspot</p>
         </div>
-        <button onClick={fetchHotspotStatus} className="refresh-btn" title="Refresh status">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-          </svg>
-          Refresh
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button onClick={() => setShowConfig(!showConfig)} className="refresh-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/>
+              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+            </svg>
+            Configure
+          </button>
+          <button onClick={fetchHotspotStatus} className="refresh-btn" title="Refresh status">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            </svg>
+            Refresh
+          </button>
+        </div>
       </div>
 
       {error && (
         <div className="error-message">
           <strong>Error:</strong>
           <pre>{error}</pre>
+        </div>
+      )}
+
+      {showConfig && (
+        <div className="admin-card config-card">
+          <div className="card-header">
+            <h2>Hotspot Configuration</h2>
+          </div>
+          <div className="card-content">
+            <div className="config-form">
+              <div className="form-group">
+                <label>SSID (Network Name):</label>
+                <input
+                  type="text"
+                  value={config.ssid}
+                  onChange={(e) => setConfig({ ...config, ssid: e.target.value })}
+                  className="form-input"
+                />
+              </div>
+              <div className="form-group">
+                <label>Password:</label>
+                <input
+                  type="text"
+                  value={config.password}
+                  onChange={(e) => setConfig({ ...config, password: e.target.value })}
+                  className="form-input"
+                  placeholder="Minimum 8 characters"
+                />
+              </div>
+              <div className="form-group">
+                <label>WiFi Interface:</label>
+                <select
+                  value={config.interface}
+                  onChange={(e) => setConfig({ ...config, interface: e.target.value })}
+                  className="form-input"
+                >
+                  {availableInterfaces.map(iface => (
+                    <option key={iface} value={iface}>{iface}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="checkbox"
+                    checked={config.auto_start}
+                    onChange={(e) => setConfig({ ...config, auto_start: e.target.checked })}
+                  />
+                  Auto-start hotspot on server startup
+                </label>
+              </div>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                <button onClick={handleUpdateConfig} className="btn-primary">
+                  Save Configuration
+                </button>
+                <button onClick={() => setShowConfig(false)} className="btn-cancel">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

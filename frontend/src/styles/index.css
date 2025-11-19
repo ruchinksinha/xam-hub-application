@@ -1298,6 +1298,42 @@ body {
   background: #dc2626;
 }
 
+.config-card {
+  margin-bottom: 24px;
+}
+
+.config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.form-input {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
 @media (max-width: 768px) {
   .device-list table {
     font-size: 12px;
