@@ -6,8 +6,14 @@ import uuid
 from pathlib import Path
 
 class JSONStorage:
-    def __init__(self, storage_dir: str = "data"):
-        self.storage_dir = Path(storage_dir)
+    def __init__(self, storage_dir: str = None):
+        if storage_dir is None:
+            base_dir = Path(__file__).parent.parent
+            storage_dir = base_dir / "data"
+        else:
+            storage_dir = Path(storage_dir)
+
+        self.storage_dir = storage_dir
         self.storage_dir.mkdir(exist_ok=True)
         self.devices_file = self.storage_dir / "registered_devices.json"
         self._ensure_file_exists()

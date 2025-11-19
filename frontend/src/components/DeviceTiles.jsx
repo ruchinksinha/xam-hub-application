@@ -1,7 +1,41 @@
 import React, { useState } from 'react'
 
-function DeviceTiles({ devices, onFlash }) {
+const API_URL = 'http://localhost:8000';
+
+function DeviceTiles({ devices, onFlash, onRegister }) {
   const [showInstructions, setShowInstructions] = useState(null)
+
+  const handleRegister = async (device) => {
+    if (!device.serial || device.serial === 'N/A') {
+      alert('Cannot register device without a valid serial number. Please enable USB debugging first.')
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/registered-devices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serial: device.serial,
+          name: device.description || device.serial,
+          model: device.description || '',
+          manufacturer: '',
+          usb_bus: device.bus || '',
+          usb_device: device.device || ''
+        })
+      })
+
+      if (response.ok) {
+        alert('Device registered successfully!')
+        if (onRegister) onRegister()
+      } else {
+        alert('Failed to register device')
+      }
+    } catch (error) {
+      console.error('Failed to register device:', error)
+      alert('Error registering device')
+    }
+  }
 
   const getADBStatusIcon = (adbStatus) => {
     switch (adbStatus) {
@@ -93,14 +127,25 @@ function DeviceTiles({ devices, onFlash }) {
             {device.status}
           </span>
 
-          <button
-            className="flash-btn"
-            onClick={() => onFlash(device.id)}
-            disabled={device.status === 'flashing' || !device.adb_ready}
-            title={!device.adb_ready ? 'USB debugging must be enabled first' : 'Flash LineageOS'}
-          >
-            {device.status === 'flashing' ? 'Flashing...' : 'Flash Device'}
-          </button>
+          <div className="device-actions">
+            {!device.is_registered && device.serial && device.serial !== 'N/A' && (
+              <button
+                className="register-btn"
+                onClick={() => handleRegister(device)}
+                title="Register this device for tracking"
+              >
+                Register Device
+              </button>
+            )}
+            <button
+              className="flash-btn"
+              onClick={() => onFlash(device.id)}
+              disabled={device.status === 'flashing' || !device.adb_ready}
+              title={!device.adb_ready ? 'USB debugging must be enabled first' : 'Flash LineageOS'}
+            >
+              {device.status === 'flashing' ? 'Flashing...' : 'Flash Device'}
+            </button>
+          </div>
         </div>
       ))}
     </div>

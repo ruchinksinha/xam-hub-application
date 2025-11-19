@@ -179,7 +179,7 @@ function Devices() {
           {viewMode === 'list' ? (
             <DeviceList devices={devices} onFlash={handleFlashDevice} />
           ) : (
-            <DeviceTiles devices={devices} onFlash={handleFlashDevice} />
+            <DeviceTiles devices={devices} onFlash={handleFlashDevice} onRegister={fetchDevices} />
           )}
         </>
       )}

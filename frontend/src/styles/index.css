@@ -247,6 +247,13 @@ body {
   color: #991b1b;
 }
 
+.device-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
 .flash-btn {
   padding: 10px 20px;
   background: #2563eb;
@@ -266,6 +273,22 @@ body {
 .flash-btn:disabled {
   background: #9ca3af;
   cursor: not-allowed;
+}
+
+.register-btn {
+  padding: 10px 20px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.register-btn:hover {
+  background: #059669;
 }
 
 .error {
