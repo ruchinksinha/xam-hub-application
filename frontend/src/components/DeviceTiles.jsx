@@ -34,11 +34,22 @@ function DeviceTiles({ devices, onFlash }) {
     <div className="device-tiles">
       {devices.map((device) => (
         <div key={device.id} className="device-tile">
-          <div className="device-icon">💻</div>
+          <div className="device-tile-header">
+            <div className="device-icon">💻</div>
+            <div className="usb-connection-badge" title="Connected via USB">
+              <svg className="usb-icon" fill="currentColor" viewBox="0 0 24 24" width="16" height="16">
+                <path d="M12 2a1 1 0 011 1v10.586l2.293-2.293a1 1 0 011.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L11 13.586V3a1 1 0 011-1zM6 15a2 2 0 00-2 2v3a2 2 0 002 2h12a2 2 0 002-2v-3a2 2 0 00-2-2h-3.586l-2 2H14a1 1 0 010 2h-4a1 1 0 010-2h1.586l-2-2H6z"/>
+              </svg>
+              USB
+            </div>
+          </div>
           <h3>{device.description}</h3>
           <p className="device-id">Bus {device.bus} - Device {device.device}</p>
           <p className="device-serial">Serial: {device.serial || 'N/A'}</p>
           <p className="device-vendor">Vendor: {device.vendor_id} | Product: {device.product_id}</p>
+          {device.is_registered && (
+            <p className="device-registered-name" title="Registered name">📋 {device.registered_name}</p>
+          )}
 
           <div className="adb-status-container">
             <span

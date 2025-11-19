@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Sidebar from './components/Sidebar'
 import Devices from './pages/Devices'
 import OsStatus from './pages/OsStatus'
+import RegisteredNodes from './pages/RegisteredNodes'
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Devices />} />
             <Route path="/os-status" element={<OsStatus />} />
+            <Route path="/registered-nodes" element={<RegisteredNodes />} />
           </Routes>
         </div>
       </div>

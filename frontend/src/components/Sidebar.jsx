@@ -6,7 +6,8 @@ function Sidebar() {
 
   const menuItems = [
     { path: '/', label: 'Home', icon: '🏠' },
-    { path: '/os-status', label: 'Node OS Status', icon: '💾' }
+    { path: '/os-status', label: 'Node OS Status', icon: '💾' },
+    { path: '/registered-nodes', label: 'Registered Nodes', icon: '📱' }
   ]
 
   return (

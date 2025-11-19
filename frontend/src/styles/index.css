@@ -175,9 +175,39 @@ body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
+.device-tile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
 .device-icon {
   font-size: 48px;
-  margin-bottom: 16px;
+}
+
+.usb-connection-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+.usb-icon {
+  flex-shrink: 0;
+}
+
+.device-registered-name {
+  font-size: 13px;
+  color: #059669;
+  margin-bottom: 8px;
+  font-weight: 500;
 }
 
 .device-tile h3 {

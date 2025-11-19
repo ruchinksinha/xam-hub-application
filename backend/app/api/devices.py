@@ -3,12 +3,47 @@ from backend.utils.usb_manager import USBManager
 from backend.utils.adb_manager import ADBManager
 from backend.config.settings import get_settings
 from backend.services.flash_service import flash_service
+from supabase import create_client, Client
+import os
+from datetime import datetime
 
 router = APIRouter(prefix="/api/devices", tags=["devices"])
+
+supabase_url = os.getenv('VITE_SUPABASE_URL')
+supabase_key = os.getenv('VITE_SUPABASE_SUPABASE_ANON_KEY')
+supabase: Client = create_client(supabase_url, supabase_key)
 
 @router.get("")
 async def get_devices():
     devices = await USBManager.get_connected_tablets()
+
+    registered_response = supabase.table('registered_devices').select('*').execute()
+    registered_devices = {d['serial']: d for d in registered_response.data}
+
+    connected_serials = set()
+    for device in devices:
+        serial = device.get('serial')
+        if serial and serial != 'N/A':
+            connected_serials.add(serial)
+            device['is_registered'] = serial in registered_devices
+            if serial in registered_devices:
+                device['registered_name'] = registered_devices[serial].get('name', '')
+
+                supabase.table('registered_devices').update({
+                    'is_connected': True,
+                    'last_seen_at': datetime.utcnow().isoformat(),
+                    'usb_bus': device.get('bus', ''),
+                    'usb_device': device.get('device', '')
+                }).eq('serial', serial).execute()
+        else:
+            device['is_registered'] = False
+
+    for serial in registered_devices:
+        if serial not in connected_serials:
+            supabase.table('registered_devices').update({
+                'is_connected': False
+            }).eq('serial', serial).execute()
+
     return {"devices": devices}
 
 @router.get("/{bus}/{device}")
