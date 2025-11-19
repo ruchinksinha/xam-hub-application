@@ -43,4 +43,9 @@ echo "Application will be accessible at http://localhost"
 echo "Press Ctrl+C to stop the server"
 echo ""
 
-sudo venv/bin/python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 80
+if [ "$EUID" -eq 0 ]; then
+    venv/bin/python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 80
+else
+    echo "Note: Running with sudo to bind to port 80"
+    sudo venv/bin/python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 80
+fi

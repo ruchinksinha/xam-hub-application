@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 
-const API_URL = 'http://localhost:8000';
+const API_URL = 'http://localhost';
 
 function DeviceTiles({ devices, onFlash, onRegister }) {
   const [showInstructions, setShowInstructions] = useState(null)

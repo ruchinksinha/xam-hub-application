@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = 'http://localhost';
 
 export default function RegisteredNodes() {
   const [devices, setDevices] = useState([]);

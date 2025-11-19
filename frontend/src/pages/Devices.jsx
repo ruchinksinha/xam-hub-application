@@ -85,7 +85,7 @@ function Devices() {
       if (serial && serial !== 'N/A' && !device.is_registered) {
         const shouldRegister = confirm('This device is not registered. Would you like to register it before flashing?')
         if (shouldRegister) {
-          await fetch('http://localhost:8000/api/registered-devices', {
+          await fetch('http://localhost/api/registered-devices', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
