@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
@@ -7,6 +8,14 @@ from backend.app.api.os_images import router as os_images_router
 from backend.app.api.registered_devices import router as registered_devices_router
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://localhost"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(devices_router)
 app.include_router(os_images_router)
