@@ -39,15 +39,21 @@ export default function AdminCentre() {
         method: 'POST'
       });
 
+      const data = await response.json();
+
       if (response.ok) {
         fetchHotspotStatus();
+        setError(null);
       } else {
-        const data = await response.json();
-        alert(data.error || `Failed to ${action} hotspot`);
+        const errorMsg = data.detail || data.error || `Failed to ${action} hotspot`;
+        setError(errorMsg);
+        alert(errorMsg);
       }
     } catch (error) {
       console.error(`Failed to ${action} hotspot:`, error);
-      alert(`Error: Could not ${action} hotspot`);
+      const errorMsg = `Error: Could not ${action} hotspot. ${error.message}`;
+      setError(errorMsg);
+      alert(errorMsg);
     }
   };
 
@@ -74,7 +80,12 @@ export default function AdminCentre() {
         </button>
       </div>
 
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <div className="error-message">
+          <strong>Error:</strong>
+          <pre>{error}</pre>
+        </div>
+      )}
 
       <div className="admin-cards">
         <div className="admin-card hotspot-card">

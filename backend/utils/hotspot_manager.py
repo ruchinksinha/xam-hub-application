@@ -120,6 +120,36 @@ class HotspotManager:
             password = config.get("password", "flashhub123")
             interface = config.get("interface", "wlan0")
 
+            # Check if nmcli is available
+            check_result = subprocess.run(
+                ["which", "nmcli"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            if check_result.returncode != 0:
+                return {"success": False, "error": "NetworkManager (nmcli) is not installed. Install with: sudo apt install network-manager"}
+
+            # Check if interface exists
+            iface_result = subprocess.run(
+                ["ip", "link", "show", interface],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            if iface_result.returncode != 0:
+                # Try to find available wireless interfaces
+                iface_list = subprocess.run(
+                    ["nmcli", "device", "status"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                return {"success": False, "error": f"Interface '{interface}' not found. Available interfaces:\n{iface_list.stdout}"}
+
+            # Try to start hotspot
             result = subprocess.run(
                 [
                     "nmcli", "device", "wifi", "hotspot",
@@ -135,12 +165,23 @@ class HotspotManager:
             if result.returncode == 0:
                 return {"success": True}
             else:
-                return {"success": False, "error": result.stderr or "Unknown error"}
+                error_msg = result.stderr or result.stdout or "Unknown error"
+                # Add helpful context to common errors
+                if "rfkill" in error_msg.lower():
+                    error_msg += "\nHint: WiFi may be blocked. Try: sudo rfkill unblock wifi"
+                elif "not supported" in error_msg.lower():
+                    error_msg += "\nHint: Your WiFi adapter may not support AP mode"
+                elif "permission denied" in error_msg.lower():
+                    error_msg += "\nHint: Run with sudo privileges"
+
+                return {"success": False, "error": error_msg}
 
         except subprocess.TimeoutExpired:
-            return {"success": False, "error": "Command timed out"}
+            return {"success": False, "error": "Command timed out - NetworkManager may be unresponsive"}
+        except FileNotFoundError as e:
+            return {"success": False, "error": f"Required command not found: {e.filename}"}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": f"Unexpected error: {str(e)}"}
 
     def stop(self):
         try:
