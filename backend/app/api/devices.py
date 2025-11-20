@@ -4,6 +4,9 @@ from backend.utils.adb_manager import ADBManager
 from backend.config.settings import get_settings
 from backend.services.flash_service import flash_service
 from backend.utils.json_storage import json_storage
+import subprocess
+import os
+from pathlib import Path
 
 router = APIRouter(prefix="/api/devices", tags=["devices"])
 
@@ -148,3 +151,67 @@ async def get_flash_status(device_id: str):
 async def get_flash_status_by_serial(serial: str):
     status = flash_service.get_flash_status(serial)
     return status
+
+@router.post("/{serial}/publish-app")
+async def publish_app(serial: str):
+    """
+    Publish/install an APK to a device using ADB
+    """
+    try:
+        # Get APK path from environment
+        apk_path = os.getenv('APK_FILE_PATH', '')
+
+        if not apk_path:
+            raise HTTPException(
+                status_code=500,
+                detail="APK_FILE_PATH not configured in .env file"
+            )
+
+        # Check if file exists
+        if not Path(apk_path).exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"APK file not found at: {apk_path}"
+            )
+
+        # Check if device is connected
+        adb_devices = await ADBManager.get_connected_devices()
+        device_exists = any(d['id'] == serial for d in adb_devices)
+
+        if not device_exists:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Device {serial} not connected via ADB"
+            )
+
+        # Install APK using ADB
+        result = subprocess.run(
+            ['adb', '-s', serial, 'install', '-r', apk_path],
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
+
+        if result.returncode == 0:
+            return {
+                "success": True,
+                "message": f"App published successfully to device {serial}",
+                "output": result.stdout
+            }
+        else:
+            error_msg = result.stderr or result.stdout or "Unknown error"
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to install app: {error_msg}"
+            )
+
+    except subprocess.TimeoutExpired:
+        raise HTTPException(
+            status_code=500,
+            detail="Installation timed out"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error publishing app: {str(e)}"
+        )
