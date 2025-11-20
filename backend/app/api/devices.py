@@ -22,8 +22,8 @@ async def get_devices():
 
     # Get WiFi hotspot connected clients
     wifi_clients = hotspot_manager.get_connected_clients()
-    wifi_ips = {client['ip_address'] for client in wifi_clients}
-    wifi_macs = {client['mac_address'] for client in wifi_clients}
+    wifi_ips = {client['ip_address']: client for client in wifi_clients}
+    wifi_macs = {client['mac_address']: client for client in wifi_clients}
 
     devices_dict = {}
     connected_serials = set()
@@ -39,12 +39,40 @@ async def get_devices():
 
             if serial in registered_devices:
                 device['registered_name'] = registered_devices[serial].get('name', '')
-                json_storage.update_device(serial, {
+                reg_device = registered_devices[serial]
+
+                # Check if this device is also connected to WiFi and capture its MAC/IP
+                device_ip = reg_device.get('wifi_ip', '')
+                device_mac = reg_device.get('wifi_mac', '')
+
+                # Try to match by known IP or MAC
+                matched_client = None
+                if device_ip and device_ip in wifi_ips:
+                    matched_client = wifi_ips[device_ip]
+                elif device_mac and device_mac in wifi_macs:
+                    matched_client = wifi_macs[device_mac]
+                else:
+                    # Try to match by hostname containing serial or device name
+                    for client in wifi_clients:
+                        hostname = client.get('hostname', '').lower()
+                        if serial.lower() in hostname or reg_device.get('name', '').lower() in hostname:
+                            matched_client = client
+                            break
+
+                # Update device with WiFi info if found
+                update_data = {
                     'is_connected': True,
                     'usb_bus': device.get('bus', ''),
                     'usb_device': device.get('device', ''),
                     'connection_type': 'usb'
-                })
+                }
+
+                if matched_client:
+                    update_data['wifi_ip'] = matched_client['ip_address']
+                    update_data['wifi_mac'] = matched_client['mac_address']
+                    device['wifi_connected'] = True
+
+                json_storage.update_device(serial, update_data)
 
             devices_dict[serial] = device
         else:
@@ -61,7 +89,16 @@ async def get_devices():
             device_ip = reg_device.get('wifi_ip', '')
             device_mac = reg_device.get('wifi_mac', '')
 
-            is_wifi_connected = device_ip in wifi_ips or device_mac in wifi_macs
+            # Check if device is connected to WiFi by IP or MAC
+            matched_wifi = None
+            if device_ip and device_ip in wifi_ips:
+                matched_wifi = wifi_ips[device_ip]
+                is_wifi_connected = True
+            elif device_mac and device_mac in wifi_macs:
+                matched_wifi = wifi_macs[device_mac]
+                is_wifi_connected = True
+            else:
+                is_wifi_connected = False
 
             if is_wifi_connected:
                 wifi_device = {

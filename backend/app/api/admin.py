@@ -67,3 +67,12 @@ async def stop_hotspot():
             raise HTTPException(status_code=500, detail=result.get("error", "Failed to stop hotspot"))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/wifi-clients")
+async def get_wifi_clients():
+    """Get list of devices currently connected to the WiFi hotspot"""
+    try:
+        clients = hotspot_manager.get_connected_clients()
+        return {"clients": clients}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

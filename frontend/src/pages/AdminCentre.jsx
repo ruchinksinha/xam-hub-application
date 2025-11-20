@@ -20,12 +20,18 @@ export default function AdminCentre() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showConfig, setShowConfig] = useState(false);
+  const [wifiClients, setWifiClients] = useState([]);
 
   const fetchHotspotStatus = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/admin/hotspot-status`);
-      const data = await response.json();
-      setHotspotStatus(data);
+      const [statusRes, clientsRes] = await Promise.all([
+        fetch(`${API_URL}/api/admin/hotspot-status`),
+        fetch(`${API_URL}/api/admin/wifi-clients`)
+      ]);
+      const statusData = await statusRes.json();
+      const clientsData = await clientsRes.json();
+      setHotspotStatus(statusData);
+      setWifiClients(clientsData.clients || []);
       setError(null);
     } catch (error) {
       console.error('Failed to fetch hotspot status:', error);
@@ -150,6 +156,19 @@ export default function AdminCentre() {
             <h2>Hotspot Configuration</h2>
           </div>
           <div className="card-content">
+            {hotspotStatus.active && config.ssid !== hotspotStatus.ssid && (
+              <div className="warning-message" style={{
+                background: '#fef3c7',
+                color: '#92400e',
+                padding: '12px',
+                borderRadius: '6px',
+                marginBottom: '16px',
+                border: '1px solid #fbbf24'
+              }}>
+                <strong>Note:</strong> Configuration changes require restarting the hotspot to take effect.
+                Current active SSID: <strong>{hotspotStatus.ssid}</strong>
+              </div>
+            )}
             <div className="config-form">
               <div className="form-group">
                 <label>SSID (Network Name):</label>
@@ -275,6 +294,35 @@ export default function AdminCentre() {
           </div>
         </div>
       </div>
+
+      {hotspotStatus.active && wifiClients.length > 0 && (
+        <div className="admin-card wifi-clients-card" style={{ marginTop: '24px' }}>
+          <div className="card-header">
+            <h2>Connected WiFi Clients</h2>
+            <span className="status-badge active">{wifiClients.length} Device{wifiClients.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="card-content">
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e5e7eb', textAlign: 'left' }}>
+                  <th style={{ padding: '12px', fontWeight: '600', color: '#374151' }}>Hostname</th>
+                  <th style={{ padding: '12px', fontWeight: '600', color: '#374151' }}>IP Address</th>
+                  <th style={{ padding: '12px', fontWeight: '600', color: '#374151' }}>MAC Address</th>
+                </tr>
+              </thead>
+              <tbody>
+                {wifiClients.map((client, index) => (
+                  <tr key={index} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                    <td style={{ padding: '12px', color: '#1f2937' }}>{client.hostname || 'Unknown'}</td>
+                    <td style={{ padding: '12px', color: '#1f2937', fontFamily: 'monospace' }}>{client.ip_address}</td>
+                    <td style={{ padding: '12px', color: '#6b7280', fontFamily: 'monospace', fontSize: '13px' }}>{client.mac_address}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
