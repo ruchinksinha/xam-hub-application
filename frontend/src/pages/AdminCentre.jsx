@@ -21,6 +21,8 @@ export default function AdminCentre() {
   const [error, setError] = useState(null);
   const [showConfig, setShowConfig] = useState(false);
   const [wifiClients, setWifiClients] = useState([]);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [diagnostics, setDiagnostics] = useState(null);
 
   const fetchHotspotStatus = async () => {
     try {
@@ -111,6 +113,17 @@ export default function AdminCentre() {
     }
   };
 
+  const fetchDiagnostics = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/admin/diagnostics`);
+      const data = await response.json();
+      setDiagnostics(data);
+    } catch (error) {
+      console.error('Failed to fetch diagnostics:', error);
+      setError('Failed to fetch diagnostics');
+    }
+  };
+
   if (loading) {
     return (
       <div className="admin-centre-page">
@@ -133,6 +146,12 @@ export default function AdminCentre() {
               <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
             </svg>
             Configure
+          </button>
+          <button onClick={() => {
+            setShowDiagnostics(!showDiagnostics);
+            if (!showDiagnostics) fetchDiagnostics();
+          }} className="refresh-btn" style={{ background: showDiagnostics ? '#3b82f6' : '' }}>
+            Diagnostics
           </button>
           <button onClick={fetchHotspotStatus} className="refresh-btn" title="Refresh status">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -320,6 +339,36 @@ export default function AdminCentre() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {showDiagnostics && diagnostics && (
+        <div className="admin-card diagnostics-card" style={{ marginTop: '24px' }}>
+          <div className="card-header">
+            <h2>WiFi Diagnostics</h2>
+          </div>
+          <div className="card-content">
+            <div style={{ fontSize: '13px', fontFamily: 'monospace', background: '#1f2937', color: '#f3f4f6', padding: '16px', borderRadius: '6px', overflow: 'auto', maxHeight: '400px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <strong style={{ color: '#60a5fa' }}>NetworkManager Status:</strong> {diagnostics.networkmanager_status}
+              </div>
+              <div style={{ marginBottom: '16px' }}>
+                <strong style={{ color: '#60a5fa' }}>AP Mode Supported:</strong> {diagnostics.ap_mode_supported ? 'Yes' : 'No'}
+              </div>
+              <div style={{ marginBottom: '16px' }}>
+                <strong style={{ color: '#60a5fa' }}>All Connections:</strong>
+                <pre style={{ whiteSpace: 'pre-wrap', marginTop: '8px' }}>{diagnostics.all_connections}</pre>
+              </div>
+              <div style={{ marginBottom: '16px' }}>
+                <strong style={{ color: '#60a5fa' }}>Interface Info:</strong>
+                <pre style={{ whiteSpace: 'pre-wrap', marginTop: '8px' }}>{diagnostics.interface_info}</pre>
+              </div>
+              <div>
+                <strong style={{ color: '#60a5fa' }}>Rfkill Status:</strong>
+                <pre style={{ whiteSpace: 'pre-wrap', marginTop: '8px' }}>{diagnostics.rfkill_status}</pre>
+              </div>
+            </div>
           </div>
         </div>
       )}

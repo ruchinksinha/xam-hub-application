@@ -70,8 +70,13 @@ class HotspotManager:
 
     def get_status(self):
         try:
+            config = self._load_config()
+            expected_ssid = config.get("ssid", "AndroidFlashHub")
+            expected_interface = config.get("interface", "wlan0")
+
+            # Check if our configured SSID connection is active
             result = subprocess.run(
-                ["nmcli", "connection", "show", "--active"],
+                ["nmcli", "-t", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active"],
                 capture_output=True,
                 text=True,
                 timeout=5
@@ -81,14 +86,41 @@ class HotspotManager:
             ssid = ""
             interface = ""
 
+            # Look for WiFi connections in AP mode
             for line in result.stdout.split('\n'):
-                if 'hotspot' in line.lower() or 'ap' in line.lower():
-                    parts = [p.strip() for p in line.split() if p.strip()]
-                    if len(parts) >= 3:
-                        ssid = parts[0]
-                        interface = parts[-1]
-                        active = True
-                    break
+                if not line.strip():
+                    continue
+
+                parts = line.split(':')
+                if len(parts) >= 3:
+                    conn_name = parts[0]
+                    conn_type = parts[1]
+                    conn_device = parts[2]
+
+                    # Check if it's a wifi connection
+                    if conn_type in ['802-11-wireless', 'wifi']:
+                        # Check if it matches our expected SSID or is a hotspot
+                        if (conn_name == expected_ssid or
+                            'hotspot' in conn_name.lower() or
+                            'ap' in conn_name.lower()):
+                            ssid = conn_name
+                            interface = conn_device
+                            active = True
+                            break
+
+            # Double-check by looking at device mode
+            if interface:
+                try:
+                    iw_result = subprocess.run(
+                        ["iw", "dev", interface, "info"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if "type AP" not in iw_result.stdout:
+                        active = False
+                except:
+                    pass
 
             ip_address = ""
             if active and interface:
@@ -126,11 +158,10 @@ class HotspotManager:
                 except:
                     pass
 
-            config = self._load_config()
             if not ssid:
-                ssid = config.get("ssid", "AndroidFlashHub")
+                ssid = expected_ssid
             if not interface:
-                interface = config.get("interface", "wlan0")
+                interface = expected_interface
 
             return {
                 "active": active,
