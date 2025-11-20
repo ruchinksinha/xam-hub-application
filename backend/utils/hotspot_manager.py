@@ -187,14 +187,55 @@ class HotspotManager:
                 )
                 return {"success": False, "error": f"Interface '{interface}' not found. Available interfaces:\n{iface_list.stdout}"}
 
-            # Try to start hotspot
+            # Stop any existing hotspot first
+            subprocess.run(
+                ["nmcli", "connection", "down", "id", "Hotspot"],
+                capture_output=True,
+                timeout=5
+            )
+            subprocess.run(
+                ["nmcli", "connection", "delete", "id", "Hotspot"],
+                capture_output=True,
+                timeout=5
+            )
+            subprocess.run(
+                ["nmcli", "connection", "down", "id", ssid],
+                capture_output=True,
+                timeout=5
+            )
+            subprocess.run(
+                ["nmcli", "connection", "delete", "id", ssid],
+                capture_output=True,
+                timeout=5
+            )
+
+            # Create a new hotspot connection with proper SSID
             result = subprocess.run(
                 [
-                    "nmcli", "device", "wifi", "hotspot",
+                    "nmcli", "connection", "add",
+                    "type", "wifi",
+                    "con-name", ssid,
                     "ifname", interface,
                     "ssid", ssid,
-                    "password", password
+                    "mode", "ap",
+                    "ipv4.method", "shared",
+                    "802-11-wireless-security.key-mgmt", "wpa-psk",
+                    "802-11-wireless-security.psk", password,
+                    "802-11-wireless.band", "bg",
+                    "autoconnect", "no"
                 ],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result.returncode != 0:
+                # If connection already exists, just bring it up
+                pass
+
+            # Activate the hotspot
+            result = subprocess.run(
+                ["nmcli", "connection", "up", "id", ssid],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -227,15 +268,28 @@ class HotspotManager:
             if not status["active"]:
                 return {"success": True, "message": "Hotspot already stopped"}
 
+            config = self._load_config()
+            ssid = config.get("ssid", "AndroidFlashHub")
             interface = status.get("interface", "wlan0")
 
+            # Try stopping by connection name (configured SSID)
             result = subprocess.run(
-                ["nmcli", "connection", "down", "id", "Hotspot"],
+                ["nmcli", "connection", "down", "id", ssid],
                 capture_output=True,
                 text=True,
                 timeout=10
             )
 
+            # Fallback: try "Hotspot" name
+            if result.returncode != 0:
+                result = subprocess.run(
+                    ["nmcli", "connection", "down", "id", "Hotspot"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+
+            # Last resort: disconnect the interface
             if result.returncode != 0:
                 result = subprocess.run(
                     ["nmcli", "device", "disconnect", interface],

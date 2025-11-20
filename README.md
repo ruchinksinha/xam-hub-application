@@ -6,12 +6,25 @@ Device Flashing Hub for managing and flashing Android devices.
 
 ### Why some devices can't see the WiFi hotspot
 
-1. **WiFi Band Compatibility**
-   - The hotspot may be broadcasting on 5GHz (802.11ac)
-   - Older devices only support 2.4GHz (802.11n)
-   - Solution: Configure hotspot to use 2.4GHz band
+**IMPORTANT**: This system uses **2.4GHz band (802.11b/g)** for maximum compatibility.
 
-2. **WiFi Adapter AP Mode Support**
+1. **SSID Broadcasting**
+   - The hotspot SSID is always broadcast (visible)
+   - Default SSID: "AndroidFlashHub"
+   - Change it in Admin Centre → Configure
+
+2. **WiFi Band - 2.4GHz ONLY**
+   - System is configured to use 2.4GHz (802.11b/g) band
+   - This ensures compatibility with older devices
+   - 5GHz is NOT supported (intentionally disabled)
+
+3. **Common Reasons Devices Can't See It**
+   - Device WiFi is turned off
+   - Device is scanning 5GHz only (rare)
+   - Signal range too weak
+   - Hotspot is not started (check Admin Centre)
+
+4. **WiFi Adapter AP Mode Support**
    - Not all WiFi adapters support Access Point (AP) mode
    - Check if your adapter supports AP mode:
      ```bash
@@ -19,7 +32,7 @@ Device Flashing Hub for managing and flashing Android devices.
      ```
    - Look for "AP" in the output
 
-3. **Driver Issues**
+5. **Driver Issues**
    - Some Linux drivers have limited hotspot support
    - Try updating drivers or using a different WiFi adapter
 
@@ -53,10 +66,11 @@ Go to **Admin Centre** to see:
    - System will auto-capture its WiFi info
    - Then it will work when WiFi-only
 
-2. **Hotspot SSID different from configuration**
-   - Configuration changes require hotspot restart
-   - Stop and start the hotspot from Admin Centre
-   - Or restart the server
+2. **Hotspot SSID different from configuration (shows "Hotspot" instead of "AndroidFlashHub")**
+   - This happens when NetworkManager creates a default hotspot
+   - **Solution**: Stop the hotspot in Admin Centre, wait 5 seconds, then start it again
+   - The system will now use your configured SSID
+   - Old connections are automatically deleted
 
 3. **DHCP lease file not accessible**
    - Check permissions: `/var/lib/NetworkManager/dnsmasq-*.leases`
