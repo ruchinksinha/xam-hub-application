@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from backend.utils.usb_manager import USBManager
 from backend.utils.adb_manager import ADBManager
+from backend.utils.hotspot_manager import HotspotManager
 from backend.config.settings import get_settings
 from backend.services.flash_service import flash_service
 from backend.utils.json_storage import json_storage
@@ -8,17 +9,21 @@ import subprocess
 import os
 from pathlib import Path
 
+hotspot_manager = HotspotManager()
+
 router = APIRouter(prefix="/api/devices", tags=["devices"])
 
 @router.get("")
 async def get_devices():
     usb_devices = await USBManager.get_connected_tablets()
-    adb_devices = await ADBManager.get_connected_devices()
 
     all_registered = json_storage.get_all_devices()
     registered_devices = {d['serial']: d for d in all_registered}
 
-    adb_serials = {d['id'] for d in adb_devices}
+    # Get WiFi hotspot connected clients
+    wifi_clients = hotspot_manager.get_connected_clients()
+    wifi_ips = {client['ip_address'] for client in wifi_clients}
+    wifi_macs = {client['mac_address'] for client in wifi_clients}
 
     devices_dict = {}
     connected_serials = set()
@@ -30,58 +35,81 @@ async def get_devices():
             connected_serials.add(serial)
             device['is_registered'] = serial in registered_devices
             device['connection_type'] = 'usb'
-            device['adb_connected'] = serial in adb_serials
+            device['wifi_connected'] = False
 
             if serial in registered_devices:
                 device['registered_name'] = registered_devices[serial].get('name', '')
                 json_storage.update_device(serial, {
                     'is_connected': True,
                     'usb_bus': device.get('bus', ''),
-                    'usb_device': device.get('device', '')
+                    'usb_device': device.get('device', ''),
+                    'connection_type': 'usb'
                 })
 
             devices_dict[serial] = device
         else:
             device['is_registered'] = False
             device['connection_type'] = 'disconnected'
-            device['adb_connected'] = False
+            device['wifi_connected'] = False
             # Use a unique ID for non-serial devices
             devices_dict[device['id']] = device
 
-    # Add registered devices that are connected via WiFi (ADB but not USB)
-    for serial in adb_serials:
-        if serial not in connected_serials and serial in registered_devices:
-            reg_device = registered_devices[serial]
-            wifi_device = {
-                'id': serial,
-                'serial': serial,
-                'description': reg_device.get('name', serial),
-                'model': reg_device.get('model', ''),
-                'manufacturer': reg_device.get('manufacturer', ''),
-                'vendor_id': '',
-                'product_id': '',
-                'bus': '',
-                'device': '',
-                'status': 'ready',
-                'is_registered': True,
-                'registered_name': reg_device.get('name', ''),
-                'connection_type': 'wifi',
-                'adb_connected': True,
-                'adb_ready': True,
-                'adb_status': 'authorized'
-            }
-            devices_dict[serial] = wifi_device
-            connected_serials.add(serial)
-            json_storage.update_device(serial, {
-                'is_connected': True,
-                'usb_bus': '',
-                'usb_device': ''
-            })
-
-    # Update connection status for disconnected registered devices
-    for serial in registered_devices:
+    # Add registered devices that are connected via WiFi hotspot but not USB
+    for serial, reg_device in registered_devices.items():
         if serial not in connected_serials:
-            json_storage.update_connection_status(serial, False)
+            # Check if this device is connected to WiFi hotspot
+            device_ip = reg_device.get('wifi_ip', '')
+            device_mac = reg_device.get('wifi_mac', '')
+
+            is_wifi_connected = device_ip in wifi_ips or device_mac in wifi_macs
+
+            if is_wifi_connected:
+                wifi_device = {
+                    'id': serial,
+                    'serial': serial,
+                    'description': reg_device.get('name', serial),
+                    'model': reg_device.get('model', ''),
+                    'manufacturer': reg_device.get('manufacturer', ''),
+                    'vendor_id': '',
+                    'product_id': '',
+                    'bus': '',
+                    'device': '',
+                    'status': 'ready',
+                    'is_registered': True,
+                    'registered_name': reg_device.get('name', ''),
+                    'connection_type': 'wifi',
+                    'wifi_connected': True,
+                    'adb_ready': False,
+                    'adb_status': 'disabled'
+                }
+                devices_dict[serial] = wifi_device
+                connected_serials.add(serial)
+                json_storage.update_device(serial, {
+                    'is_connected': True,
+                    'connection_type': 'wifi'
+                })
+            else:
+                # Device is registered but not connected
+                disconnected_device = {
+                    'id': serial,
+                    'serial': serial,
+                    'description': reg_device.get('name', serial),
+                    'model': reg_device.get('model', ''),
+                    'manufacturer': reg_device.get('manufacturer', ''),
+                    'vendor_id': '',
+                    'product_id': '',
+                    'bus': '',
+                    'device': '',
+                    'status': 'offline',
+                    'is_registered': True,
+                    'registered_name': reg_device.get('name', ''),
+                    'connection_type': 'disconnected',
+                    'wifi_connected': False,
+                    'adb_ready': False,
+                    'adb_status': 'disabled'
+                }
+                devices_dict[serial] = disconnected_device
+                json_storage.update_connection_status(serial, False)
 
     return {"devices": list(devices_dict.values())}
 

@@ -310,3 +310,38 @@ class HotspotManager:
                     print("WiFi hotspot started successfully")
                 else:
                     print(f"Failed to start hotspot: {result.get('error')}")
+
+    def get_connected_clients(self):
+        """Get list of devices connected to the hotspot with their MAC addresses and IPs"""
+        connected_clients = []
+        try:
+            # Try to read dnsmasq leases
+            lease_files = [
+                "/var/lib/NetworkManager/dnsmasq-*.leases",
+                "/var/lib/misc/dnsmasq.leases"
+            ]
+
+            for lease_pattern in lease_files:
+                result = subprocess.run(
+                    ["bash", "-c", f"cat {lease_pattern} 2>/dev/null"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+
+                if result.returncode == 0 and result.stdout.strip():
+                    for line in result.stdout.strip().split('\n'):
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            # Format: timestamp mac_address ip_address hostname
+                            connected_clients.append({
+                                'mac_address': parts[1],
+                                'ip_address': parts[2],
+                                'hostname': parts[3] if len(parts) > 3 else ''
+                            })
+                    break
+
+            return connected_clients
+        except Exception as e:
+            print(f"Error getting connected clients: {e}")
+            return []

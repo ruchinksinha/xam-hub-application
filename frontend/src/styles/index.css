@@ -330,12 +330,39 @@ body {
   transition: background 0.2s;
 }
 
-.publish-btn:hover {
+.publish-btn:hover:not(:disabled) {
   background: #7c3aed;
+}
+
+.publish-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
 }
 
 .register-btn:hover {
   background: #059669;
+}
+
+.wifi-only-message,
+.disconnected-message {
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: center;
+  font-weight: 500;
+  margin: 0;
+}
+
+.wifi-only-message {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
+.disconnected-message {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
 }
 
 .error {
