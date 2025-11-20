@@ -6,22 +6,23 @@ Device Flashing Hub for managing and flashing Android devices.
 
 ### Why some devices can't see the WiFi hotspot
 
-**IMPORTANT**: This system uses **2.4GHz band (802.11b/g)** for maximum compatibility.
+**IMPORTANT**: This system uses **5GHz band (802.11a)** for better performance.
 
 1. **SSID Broadcasting**
    - The hotspot SSID is always broadcast (visible)
    - Default SSID: "AndroidFlashHub"
    - Change it in Admin Centre → Configure
 
-2. **WiFi Band - 2.4GHz ONLY**
-   - System is configured to use 2.4GHz (802.11b/g) band
-   - This ensures compatibility with older devices
-   - 5GHz is NOT supported (intentionally disabled)
+2. **WiFi Band - 5GHz**
+   - System is configured to use 5GHz (802.11a) band
+   - Better performance and less interference
+   - Note: Older devices may only support 2.4GHz and won't see this network
 
 3. **Common Reasons Devices Can't See It**
+   - Device only supports 2.4GHz (common on older devices)
    - Device WiFi is turned off
-   - Device is scanning 5GHz only (rare)
-   - Signal range too weak
+   - Device is scanning 2.4GHz only
+   - Signal range too weak (5GHz has shorter range than 2.4GHz)
    - Hotspot is not started (check Admin Centre)
 
 4. **WiFi Adapter AP Mode Support**

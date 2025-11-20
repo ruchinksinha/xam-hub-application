@@ -218,27 +218,19 @@ class HotspotManager:
                 )
                 return {"success": False, "error": f"Interface '{interface}' not found. Available interfaces:\n{iface_list.stdout}"}
 
-            # Stop any existing hotspot first
-            subprocess.run(
-                ["nmcli", "connection", "down", "id", "Hotspot"],
-                capture_output=True,
-                timeout=5
-            )
-            subprocess.run(
-                ["nmcli", "connection", "delete", "id", "Hotspot"],
-                capture_output=True,
-                timeout=5
-            )
-            subprocess.run(
-                ["nmcli", "connection", "down", "id", ssid],
-                capture_output=True,
-                timeout=5
-            )
-            subprocess.run(
-                ["nmcli", "connection", "delete", "id", ssid],
-                capture_output=True,
-                timeout=5
-            )
+            # Stop any existing hotspot first and clean up old connections
+            old_connections = ["Hotspot", "Hotspot-1", "xLive", "xLive 1", ssid]
+            for conn in old_connections:
+                subprocess.run(
+                    ["nmcli", "connection", "down", "id", conn],
+                    capture_output=True,
+                    timeout=5
+                )
+                subprocess.run(
+                    ["nmcli", "connection", "delete", "id", conn],
+                    capture_output=True,
+                    timeout=5
+                )
 
             # Create a new hotspot connection with proper SSID
             result = subprocess.run(
@@ -252,7 +244,7 @@ class HotspotManager:
                     "ipv4.method", "shared",
                     "802-11-wireless-security.key-mgmt", "wpa-psk",
                     "802-11-wireless-security.psk", password,
-                    "802-11-wireless.band", "bg",
+                    "802-11-wireless.band", "a",
                     "autoconnect", "no"
                 ],
                 capture_output=True,
