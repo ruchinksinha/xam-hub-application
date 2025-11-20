@@ -126,14 +126,17 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
   }
 
   const getConnectionType = (device) => {
+    // Use connection_type from API if available
+    if (device.connection_type) {
+      return device.connection_type
+    }
+    // Fallback logic
     if (!device.serial || device.serial === 'N/A') {
       return 'disconnected'
     }
-    // If device has bus/device info, it's connected via USB
     if (device.bus && device.device) {
       return 'usb'
     }
-    // If it's registered but no USB info, it's WiFi
     if (device.is_registered) {
       return 'wifi'
     }
@@ -191,9 +194,13 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
             </div>
           </div>
           <h3>{device.description}</h3>
-          <p className="device-id">Bus {device.bus} - Device {device.device}</p>
+          {device.connection_type === 'usb' && (
+            <>
+              <p className="device-id">Bus {device.bus} - Device {device.device}</p>
+              <p className="device-vendor">Vendor: {device.vendor_id} | Product: {device.product_id}</p>
+            </>
+          )}
           <p className="device-serial">Serial: {device.serial || 'N/A'}</p>
-          <p className="device-vendor">Vendor: {device.vendor_id} | Product: {device.product_id}</p>
           {device.is_registered && (
             <p className="device-registered-name" title="Registered name">📋 {device.registered_name}</p>
           )}

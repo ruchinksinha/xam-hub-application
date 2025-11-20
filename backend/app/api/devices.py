@@ -12,33 +12,78 @@ router = APIRouter(prefix="/api/devices", tags=["devices"])
 
 @router.get("")
 async def get_devices():
-    devices = await USBManager.get_connected_tablets()
+    usb_devices = await USBManager.get_connected_tablets()
+    adb_devices = await ADBManager.get_connected_devices()
 
     all_registered = json_storage.get_all_devices()
     registered_devices = {d['serial']: d for d in all_registered}
 
+    adb_serials = {d['id'] for d in adb_devices}
+
+    devices_dict = {}
     connected_serials = set()
-    for device in devices:
+
+    # First, process USB-connected devices
+    for device in usb_devices:
         serial = device.get('serial')
         if serial and serial != 'N/A':
             connected_serials.add(serial)
             device['is_registered'] = serial in registered_devices
+            device['connection_type'] = 'usb'
+            device['adb_connected'] = serial in adb_serials
+
             if serial in registered_devices:
                 device['registered_name'] = registered_devices[serial].get('name', '')
-
                 json_storage.update_device(serial, {
                     'is_connected': True,
                     'usb_bus': device.get('bus', ''),
                     'usb_device': device.get('device', '')
                 })
+
+            devices_dict[serial] = device
         else:
             device['is_registered'] = False
+            device['connection_type'] = 'disconnected'
+            device['adb_connected'] = False
+            # Use a unique ID for non-serial devices
+            devices_dict[device['id']] = device
 
+    # Add registered devices that are connected via WiFi (ADB but not USB)
+    for serial in adb_serials:
+        if serial not in connected_serials and serial in registered_devices:
+            reg_device = registered_devices[serial]
+            wifi_device = {
+                'id': serial,
+                'serial': serial,
+                'description': reg_device.get('name', serial),
+                'model': reg_device.get('model', ''),
+                'manufacturer': reg_device.get('manufacturer', ''),
+                'vendor_id': '',
+                'product_id': '',
+                'bus': '',
+                'device': '',
+                'status': 'ready',
+                'is_registered': True,
+                'registered_name': reg_device.get('name', ''),
+                'connection_type': 'wifi',
+                'adb_connected': True,
+                'adb_ready': True,
+                'adb_status': 'authorized'
+            }
+            devices_dict[serial] = wifi_device
+            connected_serials.add(serial)
+            json_storage.update_device(serial, {
+                'is_connected': True,
+                'usb_bus': '',
+                'usb_device': ''
+            })
+
+    # Update connection status for disconnected registered devices
     for serial in registered_devices:
         if serial not in connected_serials:
             json_storage.update_connection_status(serial, False)
 
-    return {"devices": devices}
+    return {"devices": list(devices_dict.values())}
 
 @router.get("/{bus}/{device}")
 async def get_device_details(bus: str, device: str):
