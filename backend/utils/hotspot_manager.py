@@ -232,7 +232,7 @@ class HotspotManager:
                     timeout=5
                 )
 
-            # Create a new hotspot connection with proper SSID (try 5GHz first)
+            # Create a new hotspot connection with 2.4GHz band on channel 1
             result = subprocess.run(
                 [
                     "nmcli", "connection", "add",
@@ -244,7 +244,8 @@ class HotspotManager:
                     "ipv4.method", "shared",
                     "802-11-wireless-security.key-mgmt", "wpa-psk",
                     "802-11-wireless-security.psk", password,
-                    "802-11-wireless.band", "a",
+                    "802-11-wireless.band", "bg",
+                    "802-11-wireless.channel", "1",
                     "autoconnect", "no"
                 ],
                 capture_output=True,
@@ -267,54 +268,13 @@ class HotspotManager:
             )
 
             if result.returncode == 0:
-                return {"success": True}
+                return {"success": True, "message": "Hotspot started on 2.4GHz channel 1"}
             else:
-                # 5GHz failed, try with 2.4GHz as fallback
                 activation_error = result.stderr or result.stdout
+                error_msg = f"Failed to start hotspot.\n\nError: {activation_error}"
 
-                # Delete the failed 5GHz connection
-                subprocess.run(
-                    ["nmcli", "connection", "delete", "id", ssid],
-                    capture_output=True,
-                    timeout=5
-                )
-
-                # Try creating with 2.4GHz
-                result_24 = subprocess.run(
-                    [
-                        "nmcli", "connection", "add",
-                        "type", "wifi",
-                        "con-name", ssid,
-                        "ifname", interface,
-                        "ssid", ssid,
-                        "mode", "ap",
-                        "ipv4.method", "shared",
-                        "802-11-wireless-security.key-mgmt", "wpa-psk",
-                        "802-11-wireless-security.psk", password,
-                        "802-11-wireless.band", "bg",
-                        "autoconnect", "no"
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-
-                if result_24.returncode == 0:
-                    # Try activating 2.4GHz
-                    result_24_up = subprocess.run(
-                        ["nmcli", "connection", "up", "id", ssid],
-                        capture_output=True,
-                        text=True,
-                        timeout=10
-                    )
-
-                    if result_24_up.returncode == 0:
-                        return {"success": True, "message": "Hotspot started on 2.4GHz (5GHz not supported)"}
-
-                # Both failed, return detailed error
-                error_msg = f"Failed to start hotspot.\n\n5GHz Error: {activation_error}\n"
                 if create_error:
-                    error_msg += f"\nCreate Error: {create_error}"
+                    error_msg += f"\n\nCreate Error: {create_error}"
 
                 # Add helpful context to common errors
                 if "rfkill" in error_msg.lower():
