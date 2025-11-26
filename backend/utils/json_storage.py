@@ -61,7 +61,9 @@ class JSONStorage:
             'is_connected': device_data.get('is_connected', True),
             'usb_bus': device_data.get('usb_bus', ''),
             'usb_device': device_data.get('usb_device', ''),
-            'notes': device_data.get('notes', '')
+            'notes': device_data.get('notes', ''),
+            'wifi_mac': device_data.get('wifi_mac', ''),
+            'wifi_ip': device_data.get('wifi_ip', '')
         }
 
         devices.append(new_device)

@@ -3,6 +3,8 @@ from pydantic import BaseModel
 from typing import Optional
 from backend.utils.json_storage import json_storage
 from backend.utils.hotspot_manager import HotspotManager
+import subprocess
+import re
 
 hotspot_manager = HotspotManager()
 
@@ -70,6 +72,24 @@ async def register_device(device: RegisterDeviceRequest):
             "notes": device.notes,
             "is_connected": True
         }
+
+        # Try to get WiFi MAC address from device via ADB if connected via USB
+        if not device.wifi_mac:
+            try:
+                # Get WiFi MAC address from device
+                mac_result = subprocess.run(
+                    ['adb', '-s', device.serial, 'shell', 'cat', '/sys/class/net/wlan0/address'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if mac_result.returncode == 0 and mac_result.stdout.strip():
+                    wifi_mac = mac_result.stdout.strip().lower()
+                    # Validate MAC address format
+                    if re.match(r'^([0-9a-f]{2}:){5}[0-9a-f]{2}$', wifi_mac):
+                        data["wifi_mac"] = wifi_mac
+            except:
+                pass  # If we can't get MAC, proceed without it
 
         # Add WiFi MAC address if provided
         if device.wifi_mac:

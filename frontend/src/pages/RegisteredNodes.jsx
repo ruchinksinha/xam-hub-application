@@ -60,10 +60,15 @@ export default function RegisteredNodes() {
       });
 
       if (response.ok) {
+        alert('Device unregistered successfully!');
         fetchDevices();
+      } else {
+        const data = await response.json();
+        alert(`Failed to unregister device: ${data.detail || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Failed to unregister device:', error);
+      alert(`Error unregistering device: ${error.message}`);
     }
   };
 
