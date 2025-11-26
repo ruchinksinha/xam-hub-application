@@ -16,6 +16,7 @@ router = APIRouter(prefix="/api/devices", tags=["devices"])
 @router.get("")
 async def get_devices():
     usb_devices = await USBManager.get_connected_tablets()
+    adb_devices = await ADBManager.get_connected_devices()
 
     all_registered = json_storage.get_all_devices()
     registered_devices = {d['serial']: d for d in all_registered}
@@ -24,6 +25,17 @@ async def get_devices():
     wifi_clients = hotspot_manager.get_connected_clients()
     wifi_ips = {client['ip_address']: client for client in wifi_clients}
     wifi_macs = {client['mac_address']: client for client in wifi_clients}
+
+    # Parse ADB devices to identify WiFi-connected ones
+    adb_wifi_devices = {}
+    adb_usb_devices = {}
+    for adb_dev in adb_devices:
+        device_id = adb_dev['id']
+        if ':' in device_id:  # WiFi connection (IP:port format)
+            ip_address = device_id.split(':')[0]
+            adb_wifi_devices[ip_address] = adb_dev
+        else:  # USB connection (serial number)
+            adb_usb_devices[device_id] = adb_dev
 
     devices_dict = {}
     connected_serials = set()
@@ -85,45 +97,50 @@ async def get_devices():
     # Add registered devices that are connected via WiFi hotspot but not USB
     for serial, reg_device in registered_devices.items():
         if serial not in connected_serials:
-            # Check if this device is connected to WiFi hotspot
+            # Check if this device is connected via ADB WiFi
             device_ip = reg_device.get('wifi_ip', '')
             device_mac = reg_device.get('wifi_mac', '')
 
-            # Check if device is connected to WiFi by IP or MAC
+            # First check if device is connected via ADB WiFi
+            is_adb_wifi = device_ip and device_ip in adb_wifi_devices
+
+            # Also check if device is in WiFi clients (DHCP leases)
             matched_wifi = None
             if device_ip and device_ip in wifi_ips:
                 matched_wifi = wifi_ips[device_ip]
-                is_wifi_connected = True
             elif device_mac and device_mac in wifi_macs:
                 matched_wifi = wifi_macs[device_mac]
-                is_wifi_connected = True
-            else:
-                is_wifi_connected = False
+
+            # Consider device WiFi-connected if it's either in ADB WiFi or DHCP leases
+            is_wifi_connected = is_adb_wifi or matched_wifi is not None
 
             if is_wifi_connected:
+                adb_info = adb_wifi_devices.get(device_ip, {})
                 wifi_device = {
                     'id': serial,
                     'serial': serial,
                     'description': reg_device.get('name', serial),
-                    'model': reg_device.get('model', ''),
+                    'model': adb_info.get('model') or reg_device.get('model', ''),
                     'manufacturer': reg_device.get('manufacturer', ''),
                     'vendor_id': '',
                     'product_id': '',
                     'bus': '',
                     'device': '',
-                    'status': 'ready',
+                    'status': 'ready' if is_adb_wifi else 'connected',
                     'is_registered': True,
                     'registered_name': reg_device.get('name', ''),
                     'connection_type': 'wifi',
                     'wifi_connected': True,
-                    'adb_ready': False,
-                    'adb_status': 'disabled'
+                    'adb_ready': is_adb_wifi,
+                    'adb_status': 'online' if is_adb_wifi else 'offline',
+                    'wifi_ip': device_ip
                 }
                 devices_dict[serial] = wifi_device
                 connected_serials.add(serial)
                 json_storage.update_device(serial, {
                     'is_connected': True,
-                    'connection_type': 'wifi'
+                    'connection_type': 'wifi',
+                    'wifi_ip': device_ip
                 })
             else:
                 # Device is registered but not connected
@@ -143,7 +160,7 @@ async def get_devices():
                     'connection_type': 'disconnected',
                     'wifi_connected': False,
                     'adb_ready': False,
-                    'adb_status': 'disabled'
+                    'adb_status': 'offline'
                 }
                 devices_dict[serial] = disconnected_device
                 json_storage.update_connection_status(serial, False)
@@ -324,4 +341,110 @@ async def publish_app(serial: str):
         raise HTTPException(
             status_code=500,
             detail=f"Error publishing app: {str(e)}"
+        )
+
+@router.post("/{serial}/enable-wifi-adb")
+async def enable_wifi_adb(serial: str):
+    """
+    Enable ADB over WiFi for a USB-connected device
+    """
+    try:
+        # Check if device is connected via USB
+        adb_devices = await ADBManager.get_connected_devices()
+        device_exists = any(d['id'] == serial and ':' not in d['id'] for d in adb_devices)
+
+        if not device_exists:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Device {serial} not connected via USB. Connect via USB first to enable WiFi ADB."
+            )
+
+        # Enable TCP/IP mode on port 5555
+        result = subprocess.run(
+            ['adb', '-s', serial, 'tcpip', '5555'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode != 0:
+            error_msg = result.stderr or result.stdout or "Unknown error"
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to enable WiFi ADB: {error_msg}"
+            )
+
+        # Get device IP address
+        ip_result = subprocess.run(
+            ['adb', '-s', serial, 'shell', 'ip', 'addr', 'show', 'wlan0'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        ip_address = None
+        if ip_result.returncode == 0:
+            import re
+            match = re.search(r'inet (\d+\.\d+\.\d+\.\d+)', ip_result.stdout)
+            if match:
+                ip_address = match.group(1)
+
+        # Update registered device with WiFi IP
+        if ip_address:
+            json_storage.update_device(serial, {'wifi_ip': ip_address})
+
+        return {
+            "success": True,
+            "message": f"WiFi ADB enabled for device {serial}",
+            "ip_address": ip_address,
+            "next_step": f"Now connect using: adb connect {ip_address}:5555" if ip_address else "Get device IP and use: adb connect <IP>:5555"
+        }
+
+    except subprocess.TimeoutExpired:
+        raise HTTPException(
+            status_code=500,
+            detail="Command timed out"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error enabling WiFi ADB: {str(e)}"
+        )
+
+@router.post("/connect-wifi/{ip_address}")
+async def connect_wifi_adb(ip_address: str):
+    """
+    Connect to a device via ADB WiFi
+    """
+    try:
+        # Connect to device via ADB WiFi
+        result = subprocess.run(
+            ['adb', 'connect', f'{ip_address}:5555'],
+            capture_output=True,
+            text=True,
+            timeout=15
+        )
+
+        if result.returncode == 0 and 'connected' in result.stdout.lower():
+            return {
+                "success": True,
+                "message": f"Successfully connected to {ip_address}:5555",
+                "output": result.stdout
+            }
+        else:
+            error_msg = result.stderr or result.stdout or "Unknown error"
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to connect: {error_msg}"
+            )
+
+    except subprocess.TimeoutExpired:
+        raise HTTPException(
+            status_code=500,
+            detail="Connection timed out"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error connecting via WiFi: {str(e)}"
         )
