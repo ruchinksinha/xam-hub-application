@@ -75,21 +75,53 @@ async def register_device(device: RegisterDeviceRequest):
 
         # Try to get WiFi MAC address from device via ADB if connected via USB
         if not device.wifi_mac:
-            try:
-                # Get WiFi MAC address from device
-                mac_result = subprocess.run(
-                    ['adb', '-s', device.serial, 'shell', 'cat', '/sys/class/net/wlan0/address'],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                if mac_result.returncode == 0 and mac_result.stdout.strip():
-                    wifi_mac = mac_result.stdout.strip().lower()
-                    # Validate MAC address format
-                    if re.match(r'^([0-9a-f]{2}:){5}[0-9a-f]{2}$', wifi_mac):
-                        data["wifi_mac"] = wifi_mac
-            except:
-                pass  # If we can't get MAC, proceed without it
+            wifi_mac = None
+
+            # Try multiple methods to get MAC address
+            methods = [
+                ('sys/class/net', ['adb', '-s', device.serial, 'shell', 'cat', '/sys/class/net/wlan0/address']),
+                ('ip link', ['adb', '-s', device.serial, 'shell', 'ip', 'link', 'show', 'wlan0']),
+                ('ifconfig', ['adb', '-s', device.serial, 'shell', 'ifconfig', 'wlan0']),
+                ('getprop', ['adb', '-s', device.serial, 'shell', 'getprop', 'ro.boot.wifimacaddr'])
+            ]
+
+            for method_name, method in methods:
+                try:
+                    print(f"Trying {method_name} to get MAC address for {device.serial}")
+                    mac_result = subprocess.run(
+                        method,
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+
+                    if mac_result.returncode == 0 and mac_result.stdout.strip():
+                        output = mac_result.stdout.strip()
+                        print(f"{method_name} output: {output}")
+
+                        # Extract MAC address from output
+                        if method_name in ['sys/class/net', 'getprop']:
+                            wifi_mac = output.lower()
+                        else:
+                            # Look for MAC address pattern in output
+                            mac_match = re.search(r'([0-9a-f]{2}[:-]){5}[0-9a-f]{2}', output.lower())
+                            if mac_match:
+                                wifi_mac = mac_match.group(0).replace('-', ':')
+
+                        # Validate MAC address format
+                        if wifi_mac and re.match(r'^([0-9a-f]{2}:){5}[0-9a-f]{2}$', wifi_mac):
+                            data["wifi_mac"] = wifi_mac
+                            print(f"Successfully captured MAC address using {method_name}: {wifi_mac}")
+                            break
+                        else:
+                            print(f"Invalid MAC format from {method_name}: {wifi_mac}")
+                            wifi_mac = None
+                    else:
+                        print(f"{method_name} failed with return code {mac_result.returncode}, stderr: {mac_result.stderr}")
+
+                except Exception as e:
+                    print(f"{method_name} exception: {e}")
+                    continue
 
         # Add WiFi MAC address if provided
         if device.wifi_mac:
@@ -148,5 +180,72 @@ async def sync_device_status(serial: str, is_connected: bool):
             return {"success": False, "message": "Device not registered"}
 
         return {"success": True, "device": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{serial}/wifi-mac")
+async def get_device_wifi_mac(serial: str):
+    """Debug endpoint to test MAC address retrieval"""
+    try:
+        wifi_mac = None
+        methods_tried = []
+
+        methods = [
+            ('sys/class/net', ['adb', '-s', serial, 'shell', 'cat', '/sys/class/net/wlan0/address']),
+            ('ip link', ['adb', '-s', serial, 'shell', 'ip', 'link', 'show', 'wlan0']),
+            ('ifconfig', ['adb', '-s', serial, 'shell', 'ifconfig', 'wlan0']),
+            ('getprop', ['adb', '-s', serial, 'shell', 'getprop', 'ro.boot.wifimacaddr'])
+        ]
+
+        for method_name, method in methods:
+            try:
+                mac_result = subprocess.run(
+                    method,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+
+                methods_tried.append({
+                    'method': method_name,
+                    'command': ' '.join(method),
+                    'return_code': mac_result.returncode,
+                    'stdout': mac_result.stdout.strip(),
+                    'stderr': mac_result.stderr.strip()
+                })
+
+                if mac_result.returncode == 0 and mac_result.stdout.strip():
+                    output = mac_result.stdout.strip()
+
+                    if method_name == 'sys/class/net' or method_name == 'getprop':
+                        wifi_mac = output.lower()
+                    else:
+                        mac_match = re.search(r'([0-9a-f]{2}[:-]){5}[0-9a-f]{2}', output.lower())
+                        if mac_match:
+                            wifi_mac = mac_match.group(0).replace('-', ':')
+
+                    if wifi_mac and re.match(r'^([0-9a-f]{2}:){5}[0-9a-f]{2}$', wifi_mac):
+                        methods_tried[-1]['extracted_mac'] = wifi_mac
+                        methods_tried[-1]['success'] = True
+                        break
+                    else:
+                        methods_tried[-1]['extracted_mac'] = wifi_mac
+                        methods_tried[-1]['success'] = False
+                        wifi_mac = None
+
+            except Exception as e:
+                methods_tried.append({
+                    'method': method_name,
+                    'command': ' '.join(method),
+                    'error': str(e)
+                })
+
+        return {
+            "serial": serial,
+            "wifi_mac": wifi_mac,
+            "methods_tried": methods_tried,
+            "success": wifi_mac is not None
+        }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
