@@ -230,8 +230,10 @@ class HotspotManager:
                 text=True,
                 timeout=10
             )
+            print(f"Cleanup result: {cleanup_result.stdout}")
 
             # Create a new hotspot connection with 2.4GHz band on channel 1
+            # Try with full configuration first
             result = subprocess.run(
                 [
                     "nmcli", "connection", "add",
@@ -248,7 +250,6 @@ class HotspotManager:
                     "802-11-wireless-security.pairwise", "ccmp",
                     "802-11-wireless.band", "bg",
                     "802-11-wireless.channel", "1",
-                    "802-11-wireless.htmode", "HT40",
                     "autoconnect", "no"
                 ],
                 capture_output=True,
@@ -259,10 +260,28 @@ class HotspotManager:
             create_error = None
             if result.returncode != 0:
                 create_error = result.stderr or result.stdout
-                # Connection might already exist, continue to activation
+                print(f"Create error: {create_error}")
+
+                # If creation failed, maybe connection already exists, continue to activation
                 pass
+            else:
+                print(f"Connection created successfully")
+
+                # Try to set htmode after creation (some systems need this as a separate step)
+                try:
+                    htmode_result = subprocess.run(
+                        ["nmcli", "connection", "modify", ssid, "802-11-wireless.htmode", "HT40"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if htmode_result.returncode != 0:
+                        print(f"HT40 mode not supported, continuing with default: {htmode_result.stderr}")
+                except:
+                    print("Could not set HT40 mode, continuing with default")
 
             # Activate the hotspot
+            print(f"Activating connection: {ssid}")
             result = subprocess.run(
                 ["nmcli", "connection", "up", "id", ssid],
                 capture_output=True,
@@ -270,14 +289,19 @@ class HotspotManager:
                 timeout=10
             )
 
+            print(f"Activation returncode: {result.returncode}")
+            print(f"Activation stdout: {result.stdout}")
+            print(f"Activation stderr: {result.stderr}")
+
             if result.returncode == 0:
+                print("Hotspot started successfully")
                 return {"success": True, "message": "Hotspot started on 2.4GHz channel 1"}
             else:
                 activation_error = result.stderr or result.stdout
-                error_msg = f"Failed to start hotspot.\n\nError: {activation_error}"
+                error_msg = f"Failed to start hotspot.\n\nActivation Error: {activation_error}"
 
                 if create_error:
-                    error_msg += f"\n\nCreate Error: {create_error}"
+                    error_msg += f"\n\nConnection Create Error: {create_error}"
 
                 # Add helpful context to common errors
                 if "rfkill" in error_msg.lower():
@@ -288,7 +312,10 @@ class HotspotManager:
                     error_msg += "\n\nHint: Run with sudo privileges"
                 elif "already exists" in error_msg.lower():
                     error_msg += "\n\nHint: Connection already exists. Try stopping first, wait 5 seconds, then start again."
+                elif "secrets were required" in error_msg.lower():
+                    error_msg += "\n\nHint: Password/security configuration issue"
 
+                print(f"Error starting hotspot: {error_msg}")
                 return {"success": False, "error": error_msg}
 
         except subprocess.TimeoutExpired:
