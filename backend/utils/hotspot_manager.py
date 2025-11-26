@@ -429,15 +429,50 @@ class HotspotManager:
                     print(f"Failed to start hotspot: {result.get('error')}")
 
     def get_connected_clients(self):
-        """Get list of devices connected to the hotspot with their MAC addresses and IPs"""
+        """Get list of devices currently connected to the hotspot in real-time"""
         connected_clients = []
         try:
-            # Try to read dnsmasq leases
+            status = self.get_status()
+            if not status["active"]:
+                return []
+
+            interface = status.get("interface", "wlan0")
+
+            # Step 1: Get actively connected WiFi stations using iw
+            iw_result = subprocess.run(
+                ["iw", "dev", interface, "station", "dump"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            if iw_result.returncode != 0:
+                # Fallback to ARP table if iw fails
+                return self._get_clients_from_arp(interface)
+
+            # Parse iw station dump output
+            active_mac_addresses = []
+            current_mac = None
+
+            for line in iw_result.stdout.split('\n'):
+                line = line.strip()
+                if line.startswith('Station '):
+                    # Extract MAC address: "Station aa:bb:cc:dd:ee:ff (on wlan0)"
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        current_mac = parts[1].lower()
+                        active_mac_addresses.append(current_mac)
+
+            if not active_mac_addresses:
+                return []
+
+            # Step 2: Get IP addresses from DHCP leases for active MACs only
             lease_files = [
                 "/var/lib/NetworkManager/dnsmasq-*.leases",
                 "/var/lib/misc/dnsmasq.leases"
             ]
 
+            dhcp_map = {}
             for lease_pattern in lease_files:
                 result = subprocess.run(
                     ["bash", "-c", f"cat {lease_pattern} 2>/dev/null"],
@@ -451,14 +486,78 @@ class HotspotManager:
                         parts = line.split()
                         if len(parts) >= 3:
                             # Format: timestamp mac_address ip_address hostname
-                            connected_clients.append({
-                                'mac_address': parts[1],
+                            mac = parts[1].lower()
+                            dhcp_map[mac] = {
                                 'ip_address': parts[2],
                                 'hostname': parts[3] if len(parts) > 3 else ''
-                            })
+                            }
                     break
 
+            # Step 3: Combine active MACs with DHCP info
+            for mac in active_mac_addresses:
+                dhcp_info = dhcp_map.get(mac, {})
+                connected_clients.append({
+                    'mac_address': mac,
+                    'ip_address': dhcp_info.get('ip_address', 'N/A'),
+                    'hostname': dhcp_info.get('hostname', '')
+                })
+
             return connected_clients
+
         except Exception as e:
             print(f"Error getting connected clients: {e}")
+            return []
+
+    def _get_clients_from_arp(self, interface):
+        """Fallback method: Get connected clients from ARP table"""
+        connected_clients = []
+        try:
+            # Get ARP entries that are REACHABLE or STALE on the interface
+            arp_result = subprocess.run(
+                ["ip", "neigh", "show", "dev", interface],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            if arp_result.returncode != 0:
+                return []
+
+            for line in arp_result.stdout.split('\n'):
+                if not line.strip():
+                    continue
+
+                # Parse: "192.168.1.2 lladdr aa:bb:cc:dd:ee:ff REACHABLE"
+                parts = line.split()
+                if len(parts) >= 5 and parts[2] == 'lladdr':
+                    state = parts[4] if len(parts) > 4 else ''
+                    # Only include REACHABLE devices (actively connected)
+                    if state in ['REACHABLE', 'DELAY', 'PROBE']:
+                        ip_address = parts[0]
+                        mac_address = parts[3].lower()
+
+                        # Try to get hostname
+                        hostname = ''
+                        try:
+                            hostname_result = subprocess.run(
+                                ["bash", "-c", f"grep {mac_address} /var/lib/NetworkManager/dnsmasq-*.leases 2>/dev/null | awk '{{print $4}}'"],
+                                capture_output=True,
+                                text=True,
+                                timeout=2
+                            )
+                            if hostname_result.returncode == 0:
+                                hostname = hostname_result.stdout.strip()
+                        except:
+                            pass
+
+                        connected_clients.append({
+                            'mac_address': mac_address,
+                            'ip_address': ip_address,
+                            'hostname': hostname
+                        })
+
+            return connected_clients
+
+        except Exception as e:
+            print(f"Error getting clients from ARP: {e}")
             return []
