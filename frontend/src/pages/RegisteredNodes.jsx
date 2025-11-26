@@ -107,7 +107,8 @@ export default function RegisteredNodes() {
                 <th>Serial</th>
                 <th>Model</th>
                 <th>Manufacturer</th>
-                <th>USB Location</th>
+                <th>Connection</th>
+                <th>WiFi MAC</th>
                 <th>Last Seen</th>
                 <th>Registered</th>
                 <th>Notes</th>
@@ -139,9 +140,20 @@ export default function RegisteredNodes() {
                   <td>{device.model || 'N/A'}</td>
                   <td>{device.manufacturer || 'N/A'}</td>
                   <td>
-                    {device.is_connected && device.usb_bus && device.usb_device
-                      ? `${device.usb_bus}-${device.usb_device}`
-                      : 'N/A'}
+                    {device.is_connected ? (
+                      device.connection_type === 'wifi' ? (
+                        <span style={{ color: '#3b82f6', fontWeight: '500' }}>WiFi: {device.wifi_ip || 'N/A'}</span>
+                      ) : device.usb_bus && device.usb_device ? (
+                        <span style={{ color: '#10b981', fontWeight: '500' }}>USB: {device.usb_bus}-{device.usb_device}</span>
+                      ) : (
+                        <span style={{ color: '#10b981', fontWeight: '500' }}>Connected</span>
+                      )
+                    ) : (
+                      <span style={{ color: '#6b7280' }}>N/A</span>
+                    )}
+                  </td>
+                  <td className="serial-cell" style={{ fontFamily: 'monospace', fontSize: '13px' }}>
+                    {device.wifi_mac || '-'}
                   </td>
                   <td>{formatDate(device.last_seen_at)}</td>
                   <td>{formatDate(device.registered_at)}</td>

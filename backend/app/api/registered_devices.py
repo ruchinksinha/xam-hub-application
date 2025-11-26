@@ -13,6 +13,8 @@ class RegisterDeviceRequest(BaseModel):
     usb_bus: Optional[str] = ""
     usb_device: Optional[str] = ""
     notes: Optional[str] = ""
+    wifi_mac: Optional[str] = ""
+    wifi_ip: Optional[str] = ""
 
 class UpdateDeviceRequest(BaseModel):
     name: Optional[str] = None
@@ -40,6 +42,12 @@ async def register_device(device: RegisterDeviceRequest):
             "notes": device.notes,
             "is_connected": True
         }
+
+        # Add WiFi MAC address if provided
+        if device.wifi_mac:
+            data["wifi_mac"] = device.wifi_mac
+        if device.wifi_ip:
+            data["wifi_ip"] = device.wifi_ip
 
         result = json_storage.add_device(data)
         return {"success": True, "device": result}

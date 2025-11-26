@@ -68,6 +68,92 @@ async def stop_hotspot():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.delete("/wifi-clients/{ip_address}")
+async def disconnect_wifi_client(ip_address: str):
+    """Disconnect a device from WiFi by its IP address"""
+    try:
+        import subprocess
+        from backend.utils.json_storage import json_storage
+
+        # First, disconnect ADB connection if exists
+        try:
+            subprocess.run(
+                ['adb', 'disconnect', f'{ip_address}:5555'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+        except:
+            pass
+
+        # Get the MAC address from DHCP leases to block it temporarily
+        clients = hotspot_manager.get_connected_clients()
+        client = next((c for c in clients if c['ip_address'] == ip_address), None)
+
+        if client:
+            mac_address = client['mac_address']
+
+            # Block the MAC address using iptables (this forces disconnect)
+            try:
+                subprocess.run(
+                    ['sudo', 'iptables', '-A', 'INPUT', '-m', 'mac', '--mac-source', mac_address, '-j', 'DROP'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                subprocess.run(
+                    ['sudo', 'iptables', '-A', 'FORWARD', '-m', 'mac', '--mac-source', mac_address, '-j', 'DROP'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+
+                # Remove from DHCP lease
+                subprocess.run(
+                    ['sudo', 'dhcp_release', mac_address, ip_address],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+
+                # Wait a moment then unblock (so they can reconnect if needed)
+                import time
+                time.sleep(2)
+
+                subprocess.run(
+                    ['sudo', 'iptables', '-D', 'INPUT', '-m', 'mac', '--mac-source', mac_address, '-j', 'DROP'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                subprocess.run(
+                    ['sudo', 'iptables', '-D', 'FORWARD', '-m', 'mac', '--mac-source', mac_address, '-j', 'DROP'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+
+            except Exception as e:
+                print(f"Error blocking MAC: {e}")
+
+            # Update registered device status
+            all_registered = json_storage.get_all_devices()
+            for device in all_registered:
+                if device.get('wifi_ip') == ip_address or device.get('wifi_mac') == mac_address:
+                    json_storage.update_device(device['serial'], {
+                        'is_connected': False,
+                        'connection_type': 'disconnected'
+                    })
+
+            return {"success": True, "message": f"Disconnected device at {ip_address}"}
+        else:
+            raise HTTPException(status_code=404, detail="Client not found")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/wifi-clients")
 async def get_wifi_clients():
     """Get list of devices currently connected to the WiFi hotspot with registered device info"""

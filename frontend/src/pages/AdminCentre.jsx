@@ -58,6 +58,28 @@ export default function AdminCentre() {
     }
   };
 
+  const handleDisconnectClient = async (ipAddress) => {
+    if (!confirm(`Are you sure you want to disconnect the device at ${ipAddress}?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/admin/wifi-clients/${ipAddress}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        alert('Device disconnected successfully')
+        fetchHotspotStatus()
+      } else {
+        const data = await response.json()
+        alert(`Failed to disconnect device: ${data.detail || 'Unknown error'}`)
+      }
+    } catch (err) {
+      alert(`Error disconnecting device: ${err.message}`)
+    }
+  };
+
   useEffect(() => {
     fetchHotspotStatus();
     fetchConfig();
@@ -329,6 +351,7 @@ export default function AdminCentre() {
                   <th style={{ padding: '12px', fontWeight: '600', color: '#374151' }}>IP Address</th>
                   <th style={{ padding: '12px', fontWeight: '600', color: '#374151' }}>MAC Address</th>
                   <th style={{ padding: '12px', fontWeight: '600', color: '#374151' }}>ADB Status</th>
+                  <th style={{ padding: '12px', fontWeight: '600', color: '#374151' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -352,6 +375,26 @@ export default function AdminCentre() {
                       ) : (
                         <span style={{ color: '#f59e0b', fontWeight: '500' }}>Not Connected</span>
                       )}
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      <button
+                        onClick={() => handleDisconnectClient(client.ip_address)}
+                        style={{
+                          padding: '6px 12px',
+                          backgroundColor: '#ef4444',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseOver={(e) => e.target.style.backgroundColor = '#dc2626'}
+                        onMouseOut={(e) => e.target.style.backgroundColor = '#ef4444'}
+                      >
+                        Disconnect
+                      </button>
                     </td>
                   </tr>
                 ))}
