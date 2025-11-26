@@ -324,17 +324,35 @@ export default function AdminCentre() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #e5e7eb', textAlign: 'left' }}>
-                  <th style={{ padding: '12px', fontWeight: '600', color: '#374151' }}>Hostname</th>
+                  <th style={{ padding: '12px', fontWeight: '600', color: '#374151' }}>Device Name</th>
+                  <th style={{ padding: '12px', fontWeight: '600', color: '#374151' }}>Serial / Hostname</th>
                   <th style={{ padding: '12px', fontWeight: '600', color: '#374151' }}>IP Address</th>
                   <th style={{ padding: '12px', fontWeight: '600', color: '#374151' }}>MAC Address</th>
+                  <th style={{ padding: '12px', fontWeight: '600', color: '#374151' }}>ADB Status</th>
                 </tr>
               </thead>
               <tbody>
                 {wifiClients.map((client, index) => (
                   <tr key={index} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '12px', color: '#1f2937' }}>{client.hostname || 'Unknown'}</td>
+                    <td style={{ padding: '12px', color: '#1f2937', fontWeight: '500' }}>
+                      {client.registered_device ? (
+                        <span>{client.registered_device.name}</span>
+                      ) : (
+                        <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Unregistered</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '12px', color: '#1f2937', fontFamily: 'monospace', fontSize: '13px' }}>
+                      {client.serial || client.hostname || 'Unknown'}
+                    </td>
                     <td style={{ padding: '12px', color: '#1f2937', fontFamily: 'monospace' }}>{client.ip_address}</td>
                     <td style={{ padding: '12px', color: '#6b7280', fontFamily: 'monospace', fontSize: '13px' }}>{client.mac_address}</td>
+                    <td style={{ padding: '12px' }}>
+                      {client.adb_connected ? (
+                        <span style={{ color: '#10b981', fontWeight: '500' }}>Connected</span>
+                      ) : (
+                        <span style={{ color: '#f59e0b', fontWeight: '500' }}>Not Connected</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

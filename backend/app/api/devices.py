@@ -26,14 +26,33 @@ async def get_devices():
     wifi_ips = {client['ip_address']: client for client in wifi_clients}
     wifi_macs = {client['mac_address']: client for client in wifi_clients}
 
-    # Parse ADB devices to identify WiFi-connected ones
-    adb_wifi_devices = {}
+    # Parse ADB devices to identify WiFi-connected ones and get their serials
+    adb_wifi_devices = {}  # Maps IP -> {device info + serial}
+    adb_wifi_by_serial = {}  # Maps serial -> {device info + IP}
     adb_usb_devices = {}
+
     for adb_dev in adb_devices:
         device_id = adb_dev['id']
         if ':' in device_id:  # WiFi connection (IP:port format)
             ip_address = device_id.split(':')[0]
-            adb_wifi_devices[ip_address] = adb_dev
+            # Get serial number via ADB for WiFi devices
+            try:
+                serial_result = subprocess.run(
+                    ['adb', '-s', device_id, 'get-serialno'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if serial_result.returncode == 0:
+                    serial = serial_result.stdout.strip()
+                    adb_dev['serial'] = serial
+                    adb_dev['ip_address'] = ip_address
+                    adb_wifi_devices[ip_address] = adb_dev
+                    adb_wifi_by_serial[serial] = adb_dev
+                else:
+                    adb_wifi_devices[ip_address] = adb_dev
+            except:
+                adb_wifi_devices[ip_address] = adb_dev
         else:  # USB connection (serial number)
             adb_usb_devices[device_id] = adb_dev
 
@@ -97,73 +116,110 @@ async def get_devices():
     # Add registered devices that are connected via WiFi hotspot but not USB
     for serial, reg_device in registered_devices.items():
         if serial not in connected_serials:
-            # Check if this device is connected via ADB WiFi
-            device_ip = reg_device.get('wifi_ip', '')
-            device_mac = reg_device.get('wifi_mac', '')
+            # First check if device is connected via ADB WiFi by serial
+            adb_wifi_info = adb_wifi_by_serial.get(serial)
 
-            # First check if device is connected via ADB WiFi
-            is_adb_wifi = device_ip and device_ip in adb_wifi_devices
+            if adb_wifi_info:
+                # Device is connected via ADB WiFi - we have its serial
+                ip_address = adb_wifi_info['ip_address']
+                wifi_client = wifi_ips.get(ip_address)
 
-            # Also check if device is in WiFi clients (DHCP leases)
-            matched_wifi = None
-            if device_ip and device_ip in wifi_ips:
-                matched_wifi = wifi_ips[device_ip]
-            elif device_mac and device_mac in wifi_macs:
-                matched_wifi = wifi_macs[device_mac]
+                # Update registered device with current WiFi info
+                update_data = {
+                    'is_connected': True,
+                    'connection_type': 'wifi',
+                    'wifi_ip': ip_address
+                }
+                if wifi_client:
+                    update_data['wifi_mac'] = wifi_client['mac_address']
 
-            # Consider device WiFi-connected if it's either in ADB WiFi or DHCP leases
-            is_wifi_connected = is_adb_wifi or matched_wifi is not None
+                json_storage.update_device(serial, update_data)
 
-            if is_wifi_connected:
-                adb_info = adb_wifi_devices.get(device_ip, {})
                 wifi_device = {
                     'id': serial,
                     'serial': serial,
                     'description': reg_device.get('name', serial),
-                    'model': adb_info.get('model') or reg_device.get('model', ''),
+                    'model': adb_wifi_info.get('model') or reg_device.get('model', ''),
                     'manufacturer': reg_device.get('manufacturer', ''),
                     'vendor_id': '',
                     'product_id': '',
                     'bus': '',
                     'device': '',
-                    'status': 'ready' if is_adb_wifi else 'connected',
+                    'status': 'ready',
                     'is_registered': True,
                     'registered_name': reg_device.get('name', ''),
                     'connection_type': 'wifi',
                     'wifi_connected': True,
-                    'adb_ready': is_adb_wifi,
-                    'adb_status': 'online' if is_adb_wifi else 'offline',
-                    'wifi_ip': device_ip
+                    'adb_ready': True,
+                    'adb_status': 'online',
+                    'wifi_ip': ip_address,
+                    'wifi_mac': wifi_client['mac_address'] if wifi_client else reg_device.get('wifi_mac', '')
                 }
                 devices_dict[serial] = wifi_device
                 connected_serials.add(serial)
-                json_storage.update_device(serial, {
-                    'is_connected': True,
-                    'connection_type': 'wifi',
-                    'wifi_ip': device_ip
-                })
             else:
-                # Device is registered but not connected
-                disconnected_device = {
-                    'id': serial,
-                    'serial': serial,
-                    'description': reg_device.get('name', serial),
-                    'model': reg_device.get('model', ''),
-                    'manufacturer': reg_device.get('manufacturer', ''),
-                    'vendor_id': '',
-                    'product_id': '',
-                    'bus': '',
-                    'device': '',
-                    'status': 'offline',
-                    'is_registered': True,
-                    'registered_name': reg_device.get('name', ''),
-                    'connection_type': 'disconnected',
-                    'wifi_connected': False,
-                    'adb_ready': False,
-                    'adb_status': 'offline'
-                }
-                devices_dict[serial] = disconnected_device
-                json_storage.update_connection_status(serial, False)
+                # Check by stored IP or MAC address
+                device_ip = reg_device.get('wifi_ip', '')
+                device_mac = reg_device.get('wifi_mac', '')
+
+                # Check if device is in WiFi clients by IP or MAC
+                is_in_wifi_clients = False
+                if device_ip and device_ip in wifi_ips:
+                    is_in_wifi_clients = True
+                elif device_mac and device_mac in wifi_macs:
+                    is_in_wifi_clients = True
+                    device_ip = wifi_macs[device_mac]['ip_address']
+
+                if is_in_wifi_clients:
+                    # Connected to WiFi but not via ADB yet
+                    wifi_device = {
+                        'id': serial,
+                        'serial': serial,
+                        'description': reg_device.get('name', serial),
+                        'model': reg_device.get('model', ''),
+                        'manufacturer': reg_device.get('manufacturer', ''),
+                        'vendor_id': '',
+                        'product_id': '',
+                        'bus': '',
+                        'device': '',
+                        'status': 'connected',
+                        'is_registered': True,
+                        'registered_name': reg_device.get('name', ''),
+                        'connection_type': 'wifi',
+                        'wifi_connected': True,
+                        'adb_ready': False,
+                        'adb_status': 'offline',
+                        'wifi_ip': device_ip,
+                        'wifi_mac': device_mac
+                    }
+                    devices_dict[serial] = wifi_device
+                    connected_serials.add(serial)
+                    json_storage.update_device(serial, {
+                        'is_connected': True,
+                        'connection_type': 'wifi'
+                    })
+                else:
+                    # Device is registered but not connected
+                    disconnected_device = {
+                        'id': serial,
+                        'serial': serial,
+                        'description': reg_device.get('name', serial),
+                        'model': reg_device.get('model', ''),
+                        'manufacturer': reg_device.get('manufacturer', ''),
+                        'vendor_id': '',
+                        'product_id': '',
+                        'bus': '',
+                        'device': '',
+                        'status': 'offline',
+                        'is_registered': True,
+                        'registered_name': reg_device.get('name', ''),
+                        'connection_type': 'disconnected',
+                        'wifi_connected': False,
+                        'adb_ready': False,
+                        'adb_status': 'offline'
+                    }
+                    devices_dict[serial] = disconnected_device
+                    json_storage.update_connection_status(serial, False)
 
     return {"devices": list(devices_dict.values())}
 
@@ -426,6 +482,41 @@ async def connect_wifi_adb(ip_address: str):
         )
 
         if result.returncode == 0 and 'connected' in result.stdout.lower():
+            # Try to get serial number and update registered device
+            try:
+                serial_result = subprocess.run(
+                    ['adb', '-s', f'{ip_address}:5555', 'get-serialno'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if serial_result.returncode == 0:
+                    serial = serial_result.stdout.strip()
+
+                    # Get WiFi clients to find MAC address
+                    wifi_clients = hotspot_manager.get_connected_clients()
+                    wifi_client = next((c for c in wifi_clients if c['ip_address'] == ip_address), None)
+
+                    # Update registered device with WiFi info
+                    update_data = {
+                        'wifi_ip': ip_address,
+                        'is_connected': True,
+                        'connection_type': 'wifi'
+                    }
+                    if wifi_client:
+                        update_data['wifi_mac'] = wifi_client['mac_address']
+
+                    json_storage.update_device(serial, update_data)
+
+                    return {
+                        "success": True,
+                        "message": f"Successfully connected to {ip_address}:5555",
+                        "serial": serial,
+                        "output": result.stdout
+                    }
+            except:
+                pass
+
             return {
                 "success": True,
                 "message": f"Successfully connected to {ip_address}:5555",

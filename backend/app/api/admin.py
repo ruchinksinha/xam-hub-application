@@ -70,10 +70,69 @@ async def stop_hotspot():
 
 @router.get("/wifi-clients")
 async def get_wifi_clients():
-    """Get list of devices currently connected to the WiFi hotspot"""
+    """Get list of devices currently connected to the WiFi hotspot with registered device info"""
     try:
+        from backend.utils.json_storage import json_storage
+        import subprocess
+
         clients = hotspot_manager.get_connected_clients()
-        return {"clients": clients}
+        all_registered = json_storage.get_all_devices()
+
+        # Enhance client info with registered device data
+        enhanced_clients = []
+        for client in clients:
+            enhanced_client = client.copy()
+            enhanced_client['registered_device'] = None
+            enhanced_client['serial'] = None
+            enhanced_client['adb_connected'] = False
+
+            # Try to match by MAC address
+            matched_device = next(
+                (d for d in all_registered if d.get('wifi_mac') == client['mac_address']),
+                None
+            )
+
+            # Try to match by IP address
+            if not matched_device:
+                matched_device = next(
+                    (d for d in all_registered if d.get('wifi_ip') == client['ip_address']),
+                    None
+                )
+
+            # Try to get serial via ADB if device is at this IP
+            try:
+                adb_result = subprocess.run(
+                    ['adb', '-s', f"{client['ip_address']}:5555", 'get-serialno'],
+                    capture_output=True,
+                    text=True,
+                    timeout=3
+                )
+                if adb_result.returncode == 0:
+                    serial = adb_result.stdout.strip()
+                    enhanced_client['serial'] = serial
+                    enhanced_client['adb_connected'] = True
+
+                    # Find registered device by serial if not already matched
+                    if not matched_device:
+                        matched_device = next(
+                            (d for d in all_registered if d.get('serial') == serial),
+                            None
+                        )
+            except:
+                pass
+
+            if matched_device:
+                enhanced_client['registered_device'] = {
+                    'name': matched_device.get('name', ''),
+                    'serial': matched_device.get('serial', ''),
+                    'model': matched_device.get('model', '')
+                }
+                if not enhanced_client['serial']:
+                    enhanced_client['serial'] = matched_device.get('serial', '')
+
+            enhanced_clients.append(enhanced_client)
+
+        return {"clients": enhanced_clients}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
