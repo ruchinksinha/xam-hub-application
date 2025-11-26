@@ -174,11 +174,15 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
     }
   }
 
-  const getConnectionText = (type) => {
+  const getConnectionText = (device) => {
+    const type = getConnectionType(device)
     switch (type) {
-      case 'usb': return 'USB'
-      case 'wifi': return 'WiFi'
-      default: return 'Disconnected'
+      case 'usb':
+        return device.wifi_connected ? 'USB + WiFi' : 'USB'
+      case 'wifi':
+        return 'WiFi Connected'
+      default:
+        return 'Disconnected'
     }
   }
 
@@ -188,9 +192,9 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
         <div key={device.id} className="device-tile">
           <div className="device-tile-header">
             <div className="device-icon">💻</div>
-            <div className={getConnectionBadgeClass(getConnectionType(device))} title={`Connected via ${getConnectionText(getConnectionType(device))}`}>
+            <div className={getConnectionBadgeClass(getConnectionType(device))} title={`Connected via ${getConnectionText(device)}`}>
               {getConnectionIcon(getConnectionType(device))}
-              {getConnectionText(getConnectionType(device))}
+              {getConnectionText(device)}
             </div>
           </div>
           <h3>{device.description}</h3>

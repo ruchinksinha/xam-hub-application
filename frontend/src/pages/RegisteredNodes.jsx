@@ -119,9 +119,19 @@ export default function RegisteredNodes() {
               {devices.map((device) => (
                 <tr key={device.id}>
                   <td>
-                    <span className={`connection-status ${device.is_connected ? 'connected' : 'disconnected'}`}>
-                      {device.is_connected ? 'Connected' : 'Disconnected'}
-                    </span>
+                    {device.wifi_connected ? (
+                      <span className="connection-status connected">
+                        WiFi Connected
+                      </span>
+                    ) : device.is_connected ? (
+                      <span className="connection-status connected">
+                        Connected
+                      </span>
+                    ) : (
+                      <span className="connection-status disconnected">
+                        Disconnected
+                      </span>
+                    )}
                   </td>
                   <td>
                     {editingDevice === device.serial ? (

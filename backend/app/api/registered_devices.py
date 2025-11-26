@@ -2,6 +2,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from backend.utils.json_storage import json_storage
+from backend.utils.hotspot_manager import HotspotManager
+
+hotspot_manager = HotspotManager()
 
 router = APIRouter(prefix="/api/registered-devices", tags=["registered_devices"])
 
@@ -24,6 +27,31 @@ class UpdateDeviceRequest(BaseModel):
 async def get_registered_devices():
     try:
         devices = json_storage.get_all_devices()
+
+        # Get WiFi connected clients
+        wifi_clients = hotspot_manager.get_connected_clients()
+        wifi_macs = {client['mac_address'].lower(): client for client in wifi_clients}
+        wifi_ips = {client['ip_address']: client for client in wifi_clients}
+
+        # Enhance each device with WiFi connection status
+        for device in devices:
+            device_mac = device.get('wifi_mac', '').lower()
+            device_ip = device.get('wifi_ip', '')
+
+            # Check if device is currently connected to WiFi hotspot by MAC or IP
+            is_wifi_connected = False
+            if device_mac and device_mac in wifi_macs:
+                is_wifi_connected = True
+                # Update IP if it changed
+                device['wifi_ip'] = wifi_macs[device_mac]['ip_address']
+            elif device_ip and device_ip in wifi_ips:
+                is_wifi_connected = True
+                # Update MAC if we didn't have it
+                if not device_mac:
+                    device['wifi_mac'] = wifi_ips[device_ip]['mac_address']
+
+            device['wifi_connected'] = is_wifi_connected
+
         devices.sort(key=lambda x: x.get('registered_at', ''), reverse=True)
         return {"devices": devices}
     except Exception as e:
