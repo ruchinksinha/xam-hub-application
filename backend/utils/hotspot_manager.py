@@ -218,19 +218,18 @@ class HotspotManager:
                 )
                 return {"success": False, "error": f"Interface '{interface}' not found. Available interfaces:\n{iface_list.stdout}"}
 
-            # Stop any existing hotspot first and clean up old connections
-            old_connections = ["Hotspot", "Hotspot-1", "xLive", "xLive 1", ssid]
-            for conn in old_connections:
-                subprocess.run(
-                    ["nmcli", "connection", "down", "id", conn],
-                    capture_output=True,
-                    timeout=5
-                )
-                subprocess.run(
-                    ["nmcli", "connection", "delete", "id", conn],
-                    capture_output=True,
-                    timeout=5
-                )
+            # Delete all AP-related connections to avoid duplicates
+            cleanup_result = subprocess.run(
+                ["bash", "-c",
+                 "nmcli -t -f NAME,TYPE connection show | "
+                 "grep -E 'wifi|802-11-wireless' | "
+                 "awk -F: '{print $1}' | "
+                 "xargs -r -I {} nmcli connection delete '{}' 2>/dev/null"
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
 
             # Create a new hotspot connection with 2.4GHz band on channel 1
             result = subprocess.run(
@@ -244,8 +243,12 @@ class HotspotManager:
                     "ipv4.method", "shared",
                     "802-11-wireless-security.key-mgmt", "wpa-psk",
                     "802-11-wireless-security.psk", password,
+                    "802-11-wireless-security.proto", "rsn",
+                    "802-11-wireless-security.group", "ccmp",
+                    "802-11-wireless-security.pairwise", "ccmp",
                     "802-11-wireless.band", "bg",
                     "802-11-wireless.channel", "1",
+                    "802-11-wireless.htmode", "HT40",
                     "autoconnect", "no"
                 ],
                 capture_output=True,
