@@ -11,11 +11,6 @@ from backend.utils.hotspot_manager import HotspotManager
 
 app = FastAPI()
 
-@app.on_event("startup")
-async def startup_event():
-    hotspot_manager = HotspotManager()
-    hotspot_manager.auto_start()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:3000", "http://localhost"],

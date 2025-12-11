@@ -87,30 +87,6 @@ export default function AdminCentre() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleToggleHotspot = async (action) => {
-    try {
-      const response = await fetch(`${API_URL}/api/admin/hotspot/${action}`, {
-        method: 'POST'
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        fetchHotspotStatus();
-        setError(null);
-      } else {
-        const errorMsg = data.detail || data.error || `Failed to ${action} hotspot`;
-        setError(errorMsg);
-        alert(errorMsg);
-      }
-    } catch (error) {
-      console.error(`Failed to ${action} hotspot:`, error);
-      const errorMsg = `Error: Could not ${action} hotspot. ${error.message}`;
-      setError(errorMsg);
-      alert(errorMsg);
-    }
-  };
-
   const handleUpdateConfig = async () => {
     try {
       const response = await fetch(`${API_URL}/api/admin/hotspot-config`, {
@@ -197,19 +173,6 @@ export default function AdminCentre() {
             <h2>Hotspot Configuration</h2>
           </div>
           <div className="card-content">
-            {hotspotStatus.active && config.ssid !== hotspotStatus.ssid && (
-              <div className="warning-message" style={{
-                background: '#fef3c7',
-                color: '#92400e',
-                padding: '12px',
-                borderRadius: '6px',
-                marginBottom: '16px',
-                border: '1px solid #fbbf24'
-              }}>
-                <strong>Note:</strong> Configuration changes require restarting the hotspot to take effect.
-                Current active SSID: <strong>{hotspotStatus.ssid}</strong>
-              </div>
-            )}
             <div className="config-form">
               <div className="form-group">
                 <label>SSID (Network Name):</label>
@@ -242,15 +205,16 @@ export default function AdminCentre() {
                   ))}
                 </select>
               </div>
-              <div className="form-group">
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input
-                    type="checkbox"
-                    checked={config.auto_start}
-                    onChange={(e) => setConfig({ ...config, auto_start: e.target.checked })}
-                  />
-                  Auto-start hotspot on server startup
-                </label>
+              <div className="form-group" style={{
+                background: '#fef3c7',
+                padding: '12px',
+                borderRadius: '6px',
+                border: '1px solid #fbbf24'
+              }}>
+                <p style={{ color: '#92400e', fontSize: '14px', margin: 0 }}>
+                  <strong>Note:</strong> Hotspot is managed externally via manual scripts.
+                  Start/stop operations should be performed using your script.
+                </p>
               </div>
               <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
                 <button onClick={handleUpdateConfig} className="btn-primary">
@@ -295,23 +259,13 @@ export default function AdminCentre() {
                     <span className="value">{hotspotStatus.connected_devices || 0}</span>
                   </div>
                 </div>
-
-                <button
-                  onClick={() => handleToggleHotspot('stop')}
-                  className="btn-danger"
-                >
-                  Stop Hotspot
-                </button>
               </>
             ) : (
               <>
                 <p className="status-message">WiFi hotspot is currently inactive</p>
-                <button
-                  onClick={() => handleToggleHotspot('start')}
-                  className="btn-primary"
-                >
-                  Start Hotspot
-                </button>
+                <p style={{ color: '#6b7280', fontSize: '14px', marginTop: '8px' }}>
+                  Hotspot is managed externally via manual scripts
+                </p>
               </>
             )}
           </div>
