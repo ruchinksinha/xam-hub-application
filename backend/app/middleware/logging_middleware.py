@@ -4,13 +4,8 @@ from backend.utils.log_storage import log_storage
 import time
 
 class APILoggingMiddleware(BaseHTTPMiddleware):
-    EXCLUDED_PATHS = [
-        '/api/logs/list',
-        '/api/logs/stats'
-    ]
-
     def _should_log(self, path: str) -> bool:
-        return path.startswith('/api/') and path not in self.EXCLUDED_PATHS
+        return path.startswith('/api/exam-data/')
 
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
