@@ -3,37 +3,43 @@ import os
 from pathlib import Path
 from typing import List, Dict, Any
 from datetime import datetime
+import time
 
 
 class ExamDataStorage:
     def __init__(self, base_dir: str = None):
         if base_dir is None:
-            base_dir = Path(__file__).parent.parent / "data" / "exam_data"
+            base_dir = Path(__file__).parent.parent / "data"
         else:
             base_dir = Path(base_dir)
 
         self.base_dir = base_dir
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
-    def _get_device_folder(self, exam_id: str, session_id: str, device_id: str) -> Path:
-        folder = self.base_dir / exam_id / session_id / device_id
+    def _get_device_folder(self, data_type: str, exam_id: str, session_id: str, device_id: str) -> Path:
+        folder = self.base_dir / data_type / exam_id / session_id / device_id
         folder.mkdir(parents=True, exist_ok=True)
         return folder
 
-    def _get_file_path(self, exam_id: str, session_id: str, device_id: str, filename: str) -> Path:
-        folder = self._get_device_folder(exam_id, session_id, device_id)
-        return folder / filename
+    def _get_next_file_name(self, folder: Path) -> str:
+        timestamp = int(time.time() * 1000)
+        counter = 1
+        while True:
+            filename = f"{timestamp}_{counter}.json"
+            if not (folder / filename).exists():
+                return filename
+            counter += 1
 
-    def _read_json_file(self, file_path: Path) -> List[Dict]:
+    def _read_json_file(self, file_path: Path) -> Dict:
         if not file_path.exists():
-            return []
+            return {}
         try:
             with open(file_path, 'r') as f:
                 return json.load(f)
         except (json.JSONDecodeError, FileNotFoundError):
-            return []
+            return {}
 
-    def _write_json_file(self, file_path: Path, data: List[Dict]):
+    def _write_json_file(self, file_path: Path, data: Dict):
         with open(file_path, 'w') as f:
             json.dump(data, f, indent=2, default=str)
 
@@ -45,41 +51,42 @@ class ExamDataStorage:
         if not all([exam_id, session_id, device_id]):
             raise ValueError("examId, sessionId, and deviceId are required")
 
-        file_path = self._get_file_path(exam_id, session_id, device_id, "exam_sessions.json")
-        sessions = self._read_json_file(file_path)
+        folder = self._get_device_folder("exam_sessions", exam_id, session_id, device_id)
+        filename = self._get_next_file_name(folder)
+        file_path = folder / filename
 
         data["received_at"] = datetime.now().isoformat()
-        sessions.append(data)
-
-        self._write_json_file(file_path, sessions)
+        self._write_json_file(file_path, data)
         return True
 
     def store_question_actions(self, exam_id: str, session_id: str, device_id: str, actions: List[Dict[str, Any]]) -> bool:
         if not all([exam_id, session_id, device_id]):
             raise ValueError("examId, sessionId, and deviceId are required")
 
-        file_path = self._get_file_path(exam_id, session_id, device_id, "question_actions.json")
-        existing_actions = self._read_json_file(file_path)
+        folder = self._get_device_folder("question_actions", exam_id, session_id, device_id)
+        filename = self._get_next_file_name(folder)
+        file_path = folder / filename
 
+        received_at = datetime.now().isoformat()
         for action in actions:
-            action["received_at"] = datetime.now().isoformat()
+            action["received_at"] = received_at
 
-        existing_actions.extend(actions)
-        self._write_json_file(file_path, existing_actions)
+        self._write_json_file(file_path, {"actions": actions, "received_at": received_at})
         return True
 
     def store_snapshot_actions(self, exam_id: str, session_id: str, device_id: str, snapshots: List[Dict[str, Any]]) -> bool:
         if not all([exam_id, session_id, device_id]):
             raise ValueError("examId, sessionId, and deviceId are required")
 
-        file_path = self._get_file_path(exam_id, session_id, device_id, "snapshot_actions.json")
-        existing_snapshots = self._read_json_file(file_path)
+        folder = self._get_device_folder("snapshot_actions", exam_id, session_id, device_id)
+        filename = self._get_next_file_name(folder)
+        file_path = folder / filename
 
+        received_at = datetime.now().isoformat()
         for snapshot in snapshots:
-            snapshot["received_at"] = datetime.now().isoformat()
+            snapshot["received_at"] = received_at
 
-        existing_snapshots.extend(snapshots)
-        self._write_json_file(file_path, existing_snapshots)
+        self._write_json_file(file_path, {"snapshots": snapshots, "received_at": received_at})
         return True
 
     def store_final_submission(self, data: Dict[str, Any]) -> bool:
@@ -90,13 +97,12 @@ class ExamDataStorage:
         if not all([exam_id, session_id, device_id]):
             raise ValueError("examId, sessionId, and deviceId are required")
 
-        file_path = self._get_file_path(exam_id, session_id, device_id, "final_submissions.json")
-        submissions = self._read_json_file(file_path)
+        folder = self._get_device_folder("final_submissions", exam_id, session_id, device_id)
+        filename = self._get_next_file_name(folder)
+        file_path = folder / filename
 
         data["received_at"] = datetime.now().isoformat()
-        submissions.append(data)
-
-        self._write_json_file(file_path, submissions)
+        self._write_json_file(file_path, data)
         return True
 
 
