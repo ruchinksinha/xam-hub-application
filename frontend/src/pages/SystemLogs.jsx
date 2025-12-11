@@ -122,8 +122,8 @@ export default function SystemLogs() {
     <div className="devices-page">
       <div className="devices-header">
         <div>
-          <h1>API System Logs</h1>
-          <p className="subtitle">Real-time API request and response monitoring</p>
+          <h1>API System Logs - Port 8000</h1>
+          <p className="subtitle">Real-time monitoring of all API requests on port 8000</p>
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <button
