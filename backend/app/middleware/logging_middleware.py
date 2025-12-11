@@ -4,13 +4,21 @@ from backend.utils.log_storage import log_storage
 import time
 
 class APILoggingMiddleware(BaseHTTPMiddleware):
+    EXCLUDED_PATHS = [
+        '/api/logs/list',
+        '/api/logs/stats'
+    ]
+
+    def _should_log(self, path: str) -> bool:
+        return path.startswith('/api/') and path not in self.EXCLUDED_PATHS
+
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
 
         path = request.url.path
         method = request.method
 
-        if path.startswith('/api/'):
+        if self._should_log(path):
             client_ip = request.client.host if request.client else 'unknown'
             server_port = request.url.port or 8000
 
@@ -30,7 +38,7 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             process_time = time.time() - start_time
 
-            if path.startswith('/api/') and path != '/api/logs/list':
+            if self._should_log(path):
                 server_port = request.url.port or 8000
                 log_storage.add_log(
                     log_type='response',
@@ -49,7 +57,7 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             process_time = time.time() - start_time
 
-            if path.startswith('/api/'):
+            if self._should_log(path):
                 server_port = request.url.port or 8000
                 log_storage.add_log(
                     log_type='error',
