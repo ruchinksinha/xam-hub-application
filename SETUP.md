@@ -2,30 +2,21 @@
 
 ## Architecture
 
-The application now runs with separated frontend and backend:
+The application runs two separate FastAPI servers:
 
-- **Backend API**: Port 8000 (Python/FastAPI)
-- **Frontend**: Port 80 (Nginx serving static files)
-- **API Proxy**: Nginx proxies `/api/*` requests to backend on port 8000
+1. **Main Hub Server (Port 80)**
+   - Serves frontend application and all main APIs
+   - Device management, OS images, registered devices, admin, logs
+
+2. **Exam Data Sync Server (Port 8000)**
+   - Dedicated server for receiving exam data from mobile devices
+   - Handles exam sessions, question actions, snapshots, and submissions
 
 ## Installation Steps
 
-### 1. Setup Nginx
+### 1. Start the Application
 
-Run the nginx setup script:
-
-```bash
-./setup-nginx.sh
-```
-
-This will:
-- Install nginx if not present
-- Configure nginx to serve frontend on port 80
-- Setup API proxying to backend on port 8000
-
-### 2. Start the Backend
-
-Run the start script to build frontend and start backend:
+Run the start script:
 
 ```bash
 ./start.sh
@@ -36,58 +27,85 @@ This will:
 - Build the frontend
 - Setup Python virtual environment
 - Install backend dependencies
-- Start the backend API server on port 8000
+- Start both servers (port 80 and 8000)
 
 ## Access the Application
 
-- **Frontend**: http://localhost
-- **API**: http://localhost/api/* (proxied to port 8000)
-- **Direct API Access**: http://localhost:8000/api/* (for testing)
+- **Main Hub Application**: http://localhost
+- **Exam Data Sync Server**: http://localhost:8000
+- **Health Check (Main)**: http://localhost/api/health
+- **Health Check (Exam Data)**: http://localhost:8000/health
 
 ## Stopping the Application
 
-1. Stop the backend: Press `Ctrl+C` in the terminal running `start.sh`
-2. Nginx runs as a service and doesn't need to be stopped
+Press `Ctrl+C` in the terminal - both servers will stop automatically.
 
 ## Development Mode
 
 To run in development mode with hot reload:
 
 ```bash
-# Terminal 1 - Backend
+# Terminal 1 - Main Hub Server
 source venv/bin/activate
-uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
+sudo venv/bin/python -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 80
 
-# Terminal 2 - Frontend
+# Terminal 2 - Exam Data Sync Server
+source venv/bin/activate
+python -m uvicorn backend.app.exam_data_server:app --reload --host 0.0.0.0 --port 8000
+
+# Terminal 3 - Frontend Dev Server (optional)
 cd frontend
 npm run dev
 ```
 
 Frontend dev server will run on http://localhost:5173
 
+## Exam Data API Endpoints
+
+The exam data sync server (port 8000) provides these endpoints:
+
+- `GET /api/exam-data/status` - Server status check
+- `POST /api/exam-data/exam-sessions` - Receive exam session data
+- `POST /api/exam-data/question-actions` - Receive question action data
+- `POST /api/exam-data/snapshot-actions` - Receive snapshot data
+- `POST /api/exam-data/final-submissions` - Receive final submission data
+
+## Mobile Device Configuration
+
+Configure mobile devices to send exam data to:
+```
+http://<server-ip>:8000/api/exam-data/
+```
+
 ## Troubleshooting
 
-### Check nginx status
+### Check if servers are running
+
 ```bash
-sudo systemctl status nginx
+# Main hub
+curl http://localhost/api/health
+
+# Exam data sync
+curl http://localhost:8000/health
 ```
 
-### Check nginx logs
-```bash
-sudo tail -f /var/log/nginx/error.log
-```
+### Check server logs
 
-### Test nginx configuration
-```bash
-sudo nginx -t
-```
+Both servers output logs to the terminal. Check for errors or issues.
 
-### Reload nginx after changes
-```bash
-sudo systemctl reload nginx
-```
+### Port 80 requires sudo
 
-### Check if backend is running
+The main hub server runs on port 80 which requires root privileges. The start script handles this automatically.
+
+### Port already in use
+
+If port 80 or 8000 is already in use:
+
 ```bash
-curl http://localhost:8000/api/health
+# Check what's using the ports
+sudo lsof -i :80
+sudo lsof -i :8000
+
+# Kill the process if needed
+sudo kill -9 <PID>
 ```

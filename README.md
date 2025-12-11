@@ -6,27 +6,33 @@ Device Flashing Hub for managing and flashing Android devices.
 
 ### Setup and Run
 
-1. **Setup Nginx** (first time only):
-   ```bash
-   ./setup-nginx.sh
-   ```
+```bash
+./start.sh
+```
 
-2. **Start the Application**:
-   ```bash
-   ./start.sh
-   ```
+### Access the Application
 
-3. **Access the Application**:
-   - Frontend: http://localhost
-   - API: http://localhost/api/*
-
-For detailed setup instructions, see [SETUP.md](SETUP.md)
+- **Main Hub Application**: http://localhost (port 80)
+- **Exam Data Sync Server**: http://localhost:8000
 
 ## Architecture
 
-- **Backend API**: Runs on port 8000 (Python/FastAPI)
-- **Frontend**: Served on port 80 (Nginx)
-- **API Proxy**: Nginx proxies `/api/*` requests to backend
+The application runs two separate FastAPI servers:
+
+- **Main Hub Server (Port 80)**:
+  - Serves frontend application
+  - Device management APIs
+  - OS image management APIs
+  - Registered devices APIs
+  - Admin centre APIs
+  - System logs APIs
+
+- **Exam Data Sync Server (Port 8000)**:
+  - Exam session data API
+  - Question actions API
+  - Snapshot actions API
+  - Final submissions API
+  - Receives data from mobile devices during exams
 
 ## WiFi Connectivity Troubleshooting
 

@@ -38,10 +38,23 @@ fi
 echo "Installing Python dependencies..."
 venv/bin/pip install -r backend/requirements.txt
 
-echo "Starting backend server on port 8000..."
-echo "API will be accessible at http://localhost:8000"
-echo "Frontend will be accessible at http://localhost (via nginx)"
-echo "Press Ctrl+C to stop the server"
+echo "Starting servers..."
+echo "Main Hub Application: http://localhost"
+echo "Exam Data Sync Server: http://localhost:8000"
+echo "Press Ctrl+C to stop the servers"
 echo ""
 
-venv/bin/python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+trap 'kill $(jobs -p) 2>/dev/null' EXIT
+
+if [ "$EUID" -eq 0 ]; then
+    venv/bin/python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 80 &
+    venv/bin/python -m uvicorn backend.app.exam_data_server:app --host 0.0.0.0 --port 8000 &
+else
+    echo "Starting main hub on port 80 (requires sudo)..."
+    sudo venv/bin/python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 80 &
+
+    echo "Starting exam data sync server on port 8000..."
+    venv/bin/python -m uvicorn backend.app.exam_data_server:app --host 0.0.0.0 --port 8000 &
+fi
+
+wait
