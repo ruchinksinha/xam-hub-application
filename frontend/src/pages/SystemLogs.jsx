@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 
-const API_URL = 'http://localhost';
+const API_URL = 'http://localhost:8000';
 
 export default function SystemLogs() {
   const [logs, setLogs] = useState([]);
