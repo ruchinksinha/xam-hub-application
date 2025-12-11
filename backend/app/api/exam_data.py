@@ -15,6 +15,15 @@ snapshot_actions_storage = JSONStorage("snapshot_actions.json")
 final_submissions_storage = JSONStorage("final_submissions.json")
 
 
+@router.get("/status")
+async def get_sync_server_status():
+    return {
+        "status": "up",
+        "message": "Sync server is up and running",
+        "timestamp": datetime.now().isoformat()
+    }
+
+
 class ExamSessionData(BaseModel):
     data: Dict[str, Any]
 
