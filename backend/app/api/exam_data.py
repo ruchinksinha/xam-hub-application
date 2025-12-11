@@ -1,18 +1,13 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 from datetime import datetime
 import logging
 
-from backend.utils.json_storage import JSONStorage
+from backend.utils.exam_data_storage import exam_data_storage
 
 router = APIRouter(prefix="/api/exam-data", tags=["exam-data"])
 logger = logging.getLogger(__name__)
-
-exam_sessions_storage = JSONStorage("exam_sessions.json")
-question_actions_storage = JSONStorage("question_actions.json")
-snapshot_actions_storage = JSONStorage("snapshot_actions.json")
-final_submissions_storage = JSONStorage("final_submissions.json")
 
 
 @router.get("/status")
@@ -25,41 +20,78 @@ async def get_sync_server_status():
 
 
 class ExamSessionData(BaseModel):
-    data: Dict[str, Any]
+    deviceId: str
+    sessionId: str
+    examId: str
+    studentId: str
+    startTime: int
+    endTime: Optional[int] = None
+    durationSeconds: Optional[int] = None
+    isSubmitted: bool = False
+    currentQuestionIndex: Optional[int] = None
+
+
+class QuestionAction(BaseModel):
+    id: int
+    deviceId: str
+    sessionId: str
+    examId: str
+    questionId: str
+    actionType: str
+    selectedOption: Optional[str] = None
+    timeSpentMs: Optional[int] = None
+    timestamp: int
 
 
 class QuestionActionData(BaseModel):
-    data: Dict[str, Any]
+    actions: List[QuestionAction]
+
+
+class Snapshot(BaseModel):
+    id: int
+    deviceId: str
+    sessionId: str
+    examId: str
+    snapshotData: str
+    answeredCount: int
+    markedCount: int
+    notAnsweredCount: int
+    notVisitedCount: int
+    timestamp: int
 
 
 class SnapshotActionData(BaseModel):
-    data: Dict[str, Any]
+    snapshots: List[Snapshot]
 
 
 class FinalSubmissionData(BaseModel):
-    data: Dict[str, Any]
+    id: int
+    deviceId: str
+    sessionId: str
+    examId: str
+    submissionData: str
+    totalQuestions: int
+    answeredCount: int
+    markedCount: int
+    submissionTime: int
 
 
 @router.post("/exam-sessions")
 async def receive_exam_session(payload: ExamSessionData):
     try:
-        data = payload.data
-        data["received_at"] = datetime.now().isoformat()
+        data = payload.model_dump()
+        exam_data_storage.store_exam_session(data)
 
-        sessions = exam_sessions_storage.read()
-        if not isinstance(sessions, list):
-            sessions = []
-
-        sessions.append(data)
-        exam_sessions_storage.write(sessions)
-
-        logger.info(f"Received exam session data: {data}")
+        logger.info(f"Received exam session data for device: {payload.deviceId}, session: {payload.sessionId}")
 
         return {
             "status": "success",
             "message": "Exam session data received",
-            "timestamp": data["received_at"]
+            "timestamp": datetime.now().isoformat()
         }
+    except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error receiving exam session data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -68,23 +100,27 @@ async def receive_exam_session(payload: ExamSessionData):
 @router.post("/question-actions")
 async def receive_question_action(payload: QuestionActionData):
     try:
-        data = payload.data
-        data["received_at"] = datetime.now().isoformat()
+        if not payload.actions or len(payload.actions) == 0:
+            raise ValueError("actions array cannot be empty")
 
-        actions = question_actions_storage.read()
-        if not isinstance(actions, list):
-            actions = []
+        first_action = payload.actions[0]
+        exam_id = first_action.examId
+        session_id = first_action.sessionId
+        device_id = first_action.deviceId
 
-        actions.append(data)
-        question_actions_storage.write(actions)
+        actions_data = [action.model_dump() for action in payload.actions]
+        exam_data_storage.store_question_actions(exam_id, session_id, device_id, actions_data)
 
-        logger.info(f"Received question action data: {data}")
+        logger.info(f"Received {len(payload.actions)} question actions for device: {device_id}, session: {session_id}")
 
         return {
             "status": "success",
-            "message": "Question action data received",
-            "timestamp": data["received_at"]
+            "message": f"{len(payload.actions)} question actions received",
+            "timestamp": datetime.now().isoformat()
         }
+    except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error receiving question action data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -93,23 +129,27 @@ async def receive_question_action(payload: QuestionActionData):
 @router.post("/snapshot-actions")
 async def receive_snapshot_action(payload: SnapshotActionData):
     try:
-        data = payload.data
-        data["received_at"] = datetime.now().isoformat()
+        if not payload.snapshots or len(payload.snapshots) == 0:
+            raise ValueError("snapshots array cannot be empty")
 
-        snapshots = snapshot_actions_storage.read()
-        if not isinstance(snapshots, list):
-            snapshots = []
+        first_snapshot = payload.snapshots[0]
+        exam_id = first_snapshot.examId
+        session_id = first_snapshot.sessionId
+        device_id = first_snapshot.deviceId
 
-        snapshots.append(data)
-        snapshot_actions_storage.write(snapshots)
+        snapshots_data = [snapshot.model_dump() for snapshot in payload.snapshots]
+        exam_data_storage.store_snapshot_actions(exam_id, session_id, device_id, snapshots_data)
 
-        logger.info(f"Received snapshot action data: {data}")
+        logger.info(f"Received {len(payload.snapshots)} snapshots for device: {device_id}, session: {session_id}")
 
         return {
             "status": "success",
-            "message": "Snapshot action data received",
-            "timestamp": data["received_at"]
+            "message": f"{len(payload.snapshots)} snapshots received",
+            "timestamp": datetime.now().isoformat()
         }
+    except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error receiving snapshot action data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -118,23 +158,19 @@ async def receive_snapshot_action(payload: SnapshotActionData):
 @router.post("/final-submissions")
 async def receive_final_submission(payload: FinalSubmissionData):
     try:
-        data = payload.data
-        data["received_at"] = datetime.now().isoformat()
+        data = payload.model_dump()
+        exam_data_storage.store_final_submission(data)
 
-        submissions = final_submissions_storage.read()
-        if not isinstance(submissions, list):
-            submissions = []
-
-        submissions.append(data)
-        final_submissions_storage.write(submissions)
-
-        logger.info(f"Received final submission data: {data}")
+        logger.info(f"Received final submission for device: {payload.deviceId}, session: {payload.sessionId}")
 
         return {
             "status": "success",
             "message": "Final submission data received",
-            "timestamp": data["received_at"]
+            "timestamp": datetime.now().isoformat()
         }
+    except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error receiving final submission data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
