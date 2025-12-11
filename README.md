@@ -2,6 +2,32 @@
 
 Device Flashing Hub for managing and flashing Android devices.
 
+## Quick Start
+
+### Setup and Run
+
+1. **Setup Nginx** (first time only):
+   ```bash
+   ./setup-nginx.sh
+   ```
+
+2. **Start the Application**:
+   ```bash
+   ./start.sh
+   ```
+
+3. **Access the Application**:
+   - Frontend: http://localhost
+   - API: http://localhost/api/*
+
+For detailed setup instructions, see [SETUP.md](SETUP.md)
+
+## Architecture
+
+- **Backend API**: Runs on port 8000 (Python/FastAPI)
+- **Frontend**: Served on port 80 (Nginx)
+- **API Proxy**: Nginx proxies `/api/*` requests to backend
+
 ## WiFi Connectivity Troubleshooting
 
 ### Why some devices can't see the WiFi hotspot

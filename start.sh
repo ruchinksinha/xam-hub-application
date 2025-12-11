@@ -38,14 +38,10 @@ fi
 echo "Installing Python dependencies..."
 venv/bin/pip install -r backend/requirements.txt
 
-echo "Starting backend server..."
-echo "Application will be accessible at http://localhost"
+echo "Starting backend server on port 8000..."
+echo "API will be accessible at http://localhost:8000"
+echo "Frontend will be accessible at http://localhost (via nginx)"
 echo "Press Ctrl+C to stop the server"
 echo ""
 
-if [ "$EUID" -eq 0 ]; then
-    venv/bin/python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 80
-else
-    echo "Note: Running with sudo to bind to port 80"
-    sudo venv/bin/python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 80
-fi
+venv/bin/python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
