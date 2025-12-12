@@ -8,8 +8,8 @@ from pathlib import Path
 class JSONStorage:
     def __init__(self, storage_dir: str = None):
         if storage_dir is None:
-            base_dir = Path(__file__).parent.parent
-            storage_dir = base_dir / "data"
+            base_dir = Path(__file__).parent.parent.parent
+            storage_dir = base_dir / "exam_sync_data_dir"
         else:
             storage_dir = Path(storage_dir)
 

@@ -9,7 +9,7 @@ import time
 class ExamDataStorage:
     def __init__(self, base_dir: str = None):
         if base_dir is None:
-            base_dir = Path(__file__).parent.parent / "data"
+            base_dir = Path(__file__).parent.parent.parent / "exam_sync_data_dir"
         else:
             base_dir = Path(base_dir)
 
