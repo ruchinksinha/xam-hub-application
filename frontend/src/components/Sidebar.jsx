@@ -8,6 +8,7 @@ function Sidebar() {
     { path: '/', label: 'Home', icon: '🏠' },
     { path: '/os-status', label: 'Node OS Status', icon: '💾' },
     { path: '/registered-nodes', label: 'Registered Nodes', icon: '📱' },
+    { path: '/exam-telemetry', label: 'Exam Telemetry', icon: '📊' },
     { path: '/admin-centre', label: 'Admin Centre', icon: '⚙️' },
     { path: '/system-logs', label: 'System Logs', icon: '📋' }
   ]

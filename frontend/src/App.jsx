@@ -6,6 +6,7 @@ import OsStatus from './pages/OsStatus'
 import RegisteredNodes from './pages/RegisteredNodes'
 import AdminCentre from './pages/AdminCentre'
 import SystemLogs from './pages/SystemLogs'
+import ExamTelemetry from './pages/ExamTelemetry'
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
             <Route path="/registered-nodes" element={<RegisteredNodes />} />
             <Route path="/admin-centre" element={<AdminCentre />} />
             <Route path="/system-logs" element={<SystemLogs />} />
+            <Route path="/exam-telemetry" element={<ExamTelemetry />} />
           </Routes>
         </div>
       </div>
