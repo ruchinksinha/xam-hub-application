@@ -17,7 +17,7 @@ function ExamTelemetry() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/telemetry/stats')
+      const response = await fetch('http://localhost/api/telemetry/stats')
       const data = await response.json()
       setStats(data)
     } catch (err) {
@@ -28,7 +28,7 @@ function ExamTelemetry() {
   const fetchSessions = async () => {
     try {
       setLoading(true)
-      const response = await fetch('http://localhost:8000/api/telemetry/sessions')
+      const response = await fetch('http://localhost/api/telemetry/sessions')
       const data = await response.json()
       setSessions(data.sessions || [])
     } catch (err) {
@@ -46,7 +46,7 @@ function ExamTelemetry() {
       setDeviceTelemetry(null)
 
       const response = await fetch(
-        `http://localhost:8000/api/telemetry/session/${session.examId}/${session.sessionId}`
+        `http://localhost/api/telemetry/session/${session.examId}/${session.sessionId}`
       )
       const data = await response.json()
       setSessionDetails(data)
@@ -63,7 +63,7 @@ function ExamTelemetry() {
       setSelectedDevice(device)
 
       const response = await fetch(
-        `http://localhost:8000/api/telemetry/device/${selectedSession.examId}/${selectedSession.sessionId}/${device.deviceId}`
+        `http://localhost/api/telemetry/device/${selectedSession.examId}/${selectedSession.sessionId}/${device.deviceId}`
       )
       const data = await response.json()
       setDeviceTelemetry(data)
