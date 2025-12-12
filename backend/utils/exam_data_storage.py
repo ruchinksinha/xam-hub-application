@@ -105,5 +105,21 @@ class ExamDataStorage:
         self._write_json_file(file_path, data)
         return True
 
+    def store_answer_sheet(self, data: Dict[str, Any]) -> bool:
+        exam_id = data.get("examId")
+        session_id = data.get("sessionId")
+        device_id = data.get("deviceId")
+
+        if not all([exam_id, session_id, device_id]):
+            raise ValueError("examId, sessionId, and deviceId are required")
+
+        folder = self._get_device_folder("answer_sheets", exam_id, session_id, device_id)
+        filename = self._get_next_file_name(folder)
+        file_path = folder / filename
+
+        data["received_at"] = datetime.now().isoformat()
+        self._write_json_file(file_path, data)
+        return True
+
 
 exam_data_storage = ExamDataStorage()

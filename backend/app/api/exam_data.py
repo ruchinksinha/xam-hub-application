@@ -76,6 +76,27 @@ class FinalSubmissionData(BaseModel):
     submissionTime: int
 
 
+class UserResponse(BaseModel):
+    questionId: str
+    answered: bool
+    markedAnswer: Optional[str] = None
+    markedForReview: bool
+    visited: bool
+    timestamp: str
+    timeSpentSeconds: int
+    attempt: int
+
+
+class AnswerSheetData(BaseModel):
+    deviceId: str
+    sessionId: str
+    examId: str
+    sessionStartTime: str
+    sessionEndTime: str
+    sessionDuration: int
+    userResponses: List[UserResponse]
+
+
 @router.post("/exam-sessions")
 async def receive_exam_session(payload: ExamSessionData):
     try:
@@ -173,4 +194,25 @@ async def receive_final_submission(payload: FinalSubmissionData):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error receiving final submission data: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/answer-sheet")
+async def receive_answer_sheet(payload: AnswerSheetData):
+    try:
+        data = payload.model_dump()
+        exam_data_storage.store_answer_sheet(data)
+
+        logger.info(f"Received answer sheet for device: {payload.deviceId}, session: {payload.sessionId}, exam: {payload.examId}")
+
+        return {
+            "status": "success",
+            "message": "Answer sheet data received",
+            "timestamp": datetime.now().isoformat()
+        }
+    except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error receiving answer sheet data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
