@@ -16,7 +16,7 @@ function Sidebar() {
   return (
     <div className="sidebar">
       <div className="sidebar-header">
-        <h2>LineageOS Flash</h2>
+        <h2>Exam Telemetry Dashboard</h2>
       </div>
       <nav className="sidebar-nav">
         {menuItems.map((item) => (
