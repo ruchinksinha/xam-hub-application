@@ -26,7 +26,7 @@ app.include_router(os_images_router)
 app.include_router(registered_devices_router)
 app.include_router(admin_router)
 app.include_router(logs_router)
-app.include_router(telemetry_router, prefix="/api/telemetry", tags=["telemetry"])
+app.include_router(telemetry_router)
 
 frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
 

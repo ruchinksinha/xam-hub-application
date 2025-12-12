@@ -4,7 +4,7 @@ import json
 from typing import List, Dict, Any
 from datetime import datetime
 
-router = APIRouter()
+router = APIRouter(prefix="/api/telemetry", tags=["telemetry"])
 
 def get_exam_data_dir() -> Path:
     base_dir = Path(__file__).parent.parent.parent.parent / "exam_sync_data_dir"
