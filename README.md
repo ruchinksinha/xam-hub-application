@@ -15,6 +15,27 @@ Device Flashing Hub for managing and flashing Android devices.
 - **Main Hub Application**: http://localhost (port 80)
 - **Exam Data Sync Server**: http://localhost:8000
 
+## Environment Variables
+
+Configure these variables in the `.env` file:
+
+### Backend Configuration
+
+- **APK_FILE_PATH**: Path to the APK file for publishing to devices
+  - Example: `/path/to/your/app.apk`
+  - Used by the "Publish App" feature to install apps on connected devices
+
+- **NODEAPP_SOURCE_URL**: URL to download NodeApp.apk
+  - Example: `https://example.com/NodeApp.apk`
+  - Used by the OS Status page to download the NodeApp APK file
+  - Leave empty if not using the download feature
+
+### Frontend Configuration
+
+- **VITE_API_URL**: API base URL (optional)
+  - Default: `http://localhost`
+  - Override if running the backend on a different host/port
+
 ## Architecture
 
 The application runs two separate FastAPI servers:

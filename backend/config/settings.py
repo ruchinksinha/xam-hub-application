@@ -9,7 +9,7 @@ load_dotenv(dotenv_path=env_path)
 
 class Settings:
     def __init__(self):
-        self.LINEAGE_OS_URL = os.getenv('LINEAGE_OS_URL', '')
+        self.NODEAPP_SOURCE_URL = os.getenv('NODEAPP_SOURCE_URL', '')
 
 @lru_cache()
 def get_settings():

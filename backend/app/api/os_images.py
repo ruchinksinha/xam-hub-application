@@ -7,7 +7,7 @@ from backend.config.settings import settings
 
 router = APIRouter()
 
-DOWNLOAD_DIR = Path("/tmp/lineage_downloads")
+DOWNLOAD_DIR = Path("/tmp/nodeapp_downloads")
 
 download_progress = {}
 
@@ -19,7 +19,7 @@ async def list_os_images():
 
         images = []
         for file_path in DOWNLOAD_DIR.iterdir():
-            if file_path.is_file() and file_path.suffix in ['.zip', '.img']:
+            if file_path.is_file() and file_path.suffix in ['.apk', '.zip']:
                 stat = file_path.stat()
                 images.append({
                     "filename": file_path.name,
@@ -43,7 +43,7 @@ async def delete_os_image(filename: str):
         if not file_path.is_file():
             raise HTTPException(status_code=400, detail="Not a file")
 
-        if file_path.suffix not in ['.zip', '.img']:
+        if file_path.suffix not in ['.apk', '.zip']:
             raise HTTPException(status_code=400, detail="Invalid file type")
 
         if not str(file_path.resolve()).startswith(str(DOWNLOAD_DIR.resolve())):
@@ -100,15 +100,15 @@ async def download_file_background(url: str, filename: str):
 
 @router.post("/api/os/download")
 async def start_download():
-    """Start downloading the OS image from LINEAGE_OS_URL"""
+    """Start downloading the NodeApp from NODEAPP_SOURCE_URL"""
     try:
-        os_url = settings.LINEAGE_OS_URL
+        os_url = settings.NODEAPP_SOURCE_URL
         if not os_url:
-            raise HTTPException(status_code=400, detail="LINEAGE_OS_URL not configured")
+            raise HTTPException(status_code=400, detail="NODEAPP_SOURCE_URL not configured")
 
         filename = os_url.split('/')[-1]
-        if not filename.endswith(('.zip', '.img')):
-            filename = f"lineageos_{filename}.zip"
+        if not filename.endswith(('.apk', '.zip')):
+            filename = f"NodeApp.apk"
 
         file_path = DOWNLOAD_DIR / filename
 

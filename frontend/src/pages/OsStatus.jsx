@@ -151,14 +151,14 @@ function OsStatus() {
   return (
     <div className="os-status-page">
       <div className="page-header">
-        <h1>Node OS Status</h1>
+        <h1>Node App Status</h1>
         <div className="header-actions">
           <button
             onClick={handleDownload}
             className="btn-download"
             disabled={downloading}
           >
-            {downloading ? '⏳ Downloading...' : '⬇️ Download LineageOS'}
+            {downloading ? '⏳ Downloading...' : '⬇️ Download NodeApp.apk'}
           </button>
           <button onClick={fetchOsImages} className="btn-refresh" disabled={loading}>
             🔄 Refresh
@@ -186,7 +186,7 @@ function OsStatus() {
 
       {loading && (
         <div className="loading-message">
-          <p>Loading OS images...</p>
+          <p>Loading NodeApp files...</p>
         </div>
       )}
 
@@ -199,8 +199,8 @@ function OsStatus() {
 
       {!loading && !error && osImages.length === 0 && (
         <div className="empty-message">
-          <p>No OS images downloaded yet</p>
-          <p className="empty-hint">Click "Download LineageOS" to get started</p>
+          <p>No NodeApp files downloaded yet</p>
+          <p className="empty-hint">Click "Download NodeApp.apk" to get started</p>
         </div>
       )}
 
