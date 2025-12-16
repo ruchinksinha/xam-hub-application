@@ -11,7 +11,7 @@ from backend.app.api.logs import router as logs_router
 from backend.app.api.telemetry import router as telemetry_router
 from backend.utils.hotspot_manager import HotspotManager
 
-app = FastAPI()
+app = FastAPI(title="XAM HUB")
 
 app.add_middleware(
     CORSMiddleware,
