@@ -197,14 +197,14 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
               {getConnectionText(device)}
             </div>
           </div>
-          <h3>{device.description}</h3>
+          <h3>{device.serial || 'N/A'}</h3>
           {device.connection_type === 'usb' && (
             <>
               <p className="device-id">Bus {device.bus} - Device {device.device}</p>
               <p className="device-vendor">Vendor: {device.vendor_id} | Product: {device.product_id}</p>
             </>
           )}
-          <p className="device-serial">Serial: {device.serial || 'N/A'}</p>
+          <p className="device-serial">Name: {device.description}</p>
           {device.is_registered && (
             <p className="device-registered-name" title="Registered name">📋 {device.registered_name}</p>
           )}
@@ -303,16 +303,6 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
                 disabled={device.connection_type !== 'usb'}
               >
                 Publish App
-              </button>
-            )}
-            {device.connection_type === 'usb' && (
-              <button
-                className="flash-btn"
-                onClick={() => handleFlashClick(device.id)}
-                disabled={device.status === 'flashing' || !device.adb_ready}
-                title={!device.adb_ready ? 'USB debugging must be enabled first' : 'Flash LineageOS'}
-              >
-                {device.status === 'flashing' ? 'Flashing...' : 'Flash Device'}
               </button>
             )}
             {device.connection_type === 'wifi' && (
