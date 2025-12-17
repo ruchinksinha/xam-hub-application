@@ -1,15 +1,24 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from backend.utils.hotspot_manager import HotspotManager
+import json
+import os
+from datetime import datetime
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 hotspot_manager = HotspotManager()
+
+EXAM_METADATA_FILE = "exam_metadata.json"
 
 class HotspotConfig(BaseModel):
     ssid: str
     password: str
     interface: str
     auto_start: bool
+
+class ExamMetadata(BaseModel):
+    ssid: str
+    nodeapp_apk_path: str
 
 @router.get("/hotspot-status")
 async def get_hotspot_status():
@@ -293,5 +302,49 @@ async def get_diagnostics():
             diagnostics["rfkill_status"] = "rfkill not available"
 
         return diagnostics
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/exam-metadata")
+async def get_exam_metadata():
+    """Get the exam metadata from JSON file"""
+    try:
+        if not os.path.exists(EXAM_METADATA_FILE):
+            raise HTTPException(status_code=404, detail="Metadata file not found")
+
+        with open(EXAM_METADATA_FILE, 'r') as f:
+            data = json.load(f)
+
+        file_stats = os.stat(EXAM_METADATA_FILE)
+        timestamp = datetime.fromtimestamp(file_stats.st_mtime).isoformat()
+
+        return {
+            "metadata": data,
+            "timestamp": timestamp,
+            "file_path": os.path.abspath(EXAM_METADATA_FILE)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/exam-metadata")
+async def save_exam_metadata(metadata: ExamMetadata):
+    """Save exam metadata to JSON file"""
+    try:
+        data = metadata.dict()
+
+        with open(EXAM_METADATA_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+
+        file_stats = os.stat(EXAM_METADATA_FILE)
+        timestamp = datetime.fromtimestamp(file_stats.st_mtime).isoformat()
+
+        return {
+            "metadata": data,
+            "timestamp": timestamp,
+            "file_path": os.path.abspath(EXAM_METADATA_FILE),
+            "message": "Metadata saved successfully"
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

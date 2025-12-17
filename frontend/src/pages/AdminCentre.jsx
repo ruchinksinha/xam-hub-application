@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import WifiHotspotTab from '../components/WifiHotspotTab';
+import ProfilePublishTab from '../components/ProfilePublishTab';
 
 export default function AdminCentre() {
   const [activeTab, setActiveTab] = useState('wifi-hotspot');
 
   const tabs = [
-    { id: 'wifi-hotspot', label: 'WiFi Hotspot', icon: '📡' }
+    { id: 'wifi-hotspot', label: 'WiFi Hotspot', icon: '📡' },
+    { id: 'profile-publish', label: 'Profile Publish', icon: '📋' }
   ];
 
   return (
@@ -33,6 +35,7 @@ export default function AdminCentre() {
 
         <div className="tabs-content">
           {activeTab === 'wifi-hotspot' && <WifiHotspotTab />}
+          {activeTab === 'profile-publish' && <ProfilePublishTab />}
         </div>
       </div>
     </div>
