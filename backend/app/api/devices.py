@@ -787,13 +787,13 @@ async def push_profile(serial: str):
             steps[3]["error"] = f"Error getting USB info: {str(e)}"
             return {"success": False, "steps": steps, "message": steps[3]["error"]}
 
-        # Step 5: Mount MTP device using gvfs
+        # Step 5: Mount MTP device using gio
         mount_path = None
         try:
             mtp_uri = f"mtp://[usb:{bus_num},{dev_num}]/"
 
             mount_result = subprocess.run(
-                ['gvfs-mount', mtp_uri],
+                ['gio', 'mount', mtp_uri],
                 capture_output=True,
                 text=True,
                 timeout=30
@@ -844,7 +844,7 @@ async def push_profile(serial: str):
             steps[5]["status"] = "failed"
             steps[5]["error"] = f"Failed to create XAM directory: {str(e)}"
             # Unmount before returning
-            subprocess.run(['gvfs-mount', '-u', mount_path], capture_output=True)
+            subprocess.run(['gio', 'mount', '-u', mount_path], capture_output=True)
             return {"success": False, "steps": steps, "message": steps[5]["error"]}
 
         # Step 7: Copy exam_metadata.json
@@ -856,13 +856,13 @@ async def push_profile(serial: str):
             steps[6]["status"] = "failed"
             steps[6]["error"] = f"Failed to copy exam_metadata.json: {str(e)}"
             # Unmount before returning
-            subprocess.run(['gvfs-mount', '-u', mount_path], capture_output=True)
+            subprocess.run(['gio', 'mount', '-u', mount_path], capture_output=True)
             return {"success": False, "steps": steps, "message": steps[6]["error"]}
 
         # Step 8: Unmount device
         try:
             result = subprocess.run(
-                ['gvfs-mount', '-u', mount_path],
+                ['gio', 'mount', '-u', mount_path],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -888,7 +888,7 @@ async def push_profile(serial: str):
     except Exception as e:
         # Try to unmount if mount_path was created
         if mount_path:
-            subprocess.run(['gvfs-mount', '-u', mount_path], capture_output=True)
+            subprocess.run(['gio', 'mount', '-u', mount_path], capture_output=True)
 
         raise HTTPException(
             status_code=500,
