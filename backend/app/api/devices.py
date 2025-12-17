@@ -257,12 +257,22 @@ async def scan_mtp_devices():
         )
 
         if result.returncode != 0:
+            stderr_msg = result.stderr.strip() if result.stderr else "Unknown error"
+            stdout_msg = result.stdout.strip() if result.stdout else ""
+            error_detail = f"jmtpfs failed: {stderr_msg or stdout_msg}"
             raise HTTPException(
                 status_code=500,
-                detail="Failed to list MTP devices"
+                detail=error_detail
             )
 
         mtp_output = result.stdout
+        if not mtp_output or not mtp_output.strip():
+            return {
+                "success": True,
+                "message": "No MTP devices found",
+                "map": {}
+            }
+
         usb_devices = await USBManager.get_connected_tablets()
 
         for line in mtp_output.split('\n'):
@@ -294,17 +304,22 @@ async def scan_mtp_devices():
     except subprocess.TimeoutExpired:
         raise HTTPException(
             status_code=500,
-            detail="Timeout while scanning MTP devices"
+            detail="Timeout while scanning MTP devices (>10s)"
         )
     except FileNotFoundError:
         raise HTTPException(
             status_code=500,
-            detail="jmtpfs not installed on system"
+            detail="jmtpfs not installed. Install with: sudo apt-get install jmtpfs"
         )
+    except HTTPException:
+        raise
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error in scan_mtp_devices: {error_trace}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error scanning MTP devices: {str(e)}"
+            detail=f"Unexpected error: {type(e).__name__}: {str(e)}"
         )
 
 @router.get("/mtp-map")
