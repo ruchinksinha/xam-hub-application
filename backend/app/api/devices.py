@@ -740,81 +740,91 @@ async def push_profile(serial: str):
                 return {"success": False, "steps": steps, "message": steps[2]["error"]}
             steps[2]["status"] = "completed"
 
-        # Step 4: Clean up any stuck mounts
-        mount_path = f"/mnt/mtp/{serial}"
+        # Step 4: Get USB bus and device info
         try:
-            subprocess.run(['fusermount', '-uz', mount_path], capture_output=True, timeout=10)
-            steps[3]["status"] = "completed"
-        except Exception:
-            pass
-
-        # Step 5: Mount MTP device using gio
-        try:
-            result = subprocess.run(
-                ['gio', 'mount', '-li'],
+            usb_result = subprocess.run(
+                ['lsusb'],
                 capture_output=True,
                 text=True,
                 timeout=10
             )
 
-            mtp_uri = None
-            for line in result.stdout.split('\n'):
-                if 'mtp://' in line and serial in line:
-                    import re
-                    uri_match = re.search(r'(mtp://[^\s]+)', line)
-                    if uri_match:
-                        mtp_uri = uri_match.group(1)
-                        break
+            bus_num = None
+            dev_num = None
 
-            if not mtp_uri:
-                for line in result.stdout.split('\n'):
-                    if 'mtp://' in line:
-                        import re
-                        uri_match = re.search(r'(mtp://[^\s]+)', line)
-                        if uri_match:
-                            mtp_uri = uri_match.group(1)
-                            break
-
-            if mtp_uri:
-                mount_result = subprocess.run(
-                    ['gio', 'mount', mtp_uri],
-                    capture_output=True,
-                    text=True,
-                    timeout=30
-                )
-                if mount_result.returncode != 0 and 'already mounted' not in mount_result.stderr.lower():
-                    steps[4]["status"] = "failed"
-                    steps[4]["error"] = f"Failed to mount via gio: {mount_result.stderr or mount_result.stdout}"
-                    return {"success": False, "steps": steps, "message": steps[4]["error"]}
-
-                gvfs_result = subprocess.run(
-                    ['find', '/run/user/1000/gvfs', '-type', 'd', '-name', f'*{serial}*'],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                if gvfs_result.stdout.strip():
-                    mount_path = gvfs_result.stdout.strip().split('\n')[0]
-                else:
-                    gvfs_result = subprocess.run(
-                        ['ls', '/run/user/1000/gvfs'],
+            for line in usb_result.stdout.split('\n'):
+                if 'Bus' in line:
+                    adb_check = subprocess.run(
+                        ['adb', '-s', serial, 'shell', 'echo test'],
                         capture_output=True,
                         text=True,
-                        timeout=10
+                        timeout=5
                     )
-                    mtp_mounts = [d for d in gvfs_result.stdout.split('\n') if 'mtp' in d.lower()]
-                    if mtp_mounts:
-                        mount_path = f"/run/user/1000/gvfs/{mtp_mounts[0]}"
-                    else:
-                        steps[4]["status"] = "failed"
-                        steps[4]["error"] = "Device mounted but mount point not found"
-                        return {"success": False, "steps": steps, "message": steps[4]["error"]}
+                    if adb_check.returncode == 0:
+                        parts = line.split()
+                        if len(parts) >= 4:
+                            bus_num = parts[1].lstrip('0') or '0'
+                            dev_num = parts[3].rstrip(':').lstrip('0') or '0'
+                            break
 
-                steps[4]["status"] = "completed"
-            else:
+            if not bus_num or not dev_num:
+                for line in usb_result.stdout.split('\n'):
+                    if 'android' in line.lower() or 'samsung' in line.lower() or 'google' in line.lower():
+                        parts = line.split()
+                        if len(parts) >= 4:
+                            bus_num = parts[1].lstrip('0') or '0'
+                            dev_num = parts[3].rstrip(':').lstrip('0') or '0'
+                            break
+
+            if not bus_num or not dev_num:
+                steps[3]["status"] = "failed"
+                steps[3]["error"] = "Could not find USB device info"
+                return {"success": False, "steps": steps, "message": steps[3]["error"]}
+
+            steps[3]["status"] = "completed"
+        except Exception as e:
+            steps[3]["status"] = "failed"
+            steps[3]["error"] = f"Error getting USB info: {str(e)}"
+            return {"success": False, "steps": steps, "message": steps[3]["error"]}
+
+        # Step 5: Mount MTP device using gvfs
+        mount_path = None
+        try:
+            mtp_uri = f"mtp://[usb:{bus_num},{dev_num}]/"
+
+            mount_result = subprocess.run(
+                ['gvfs-mount', mtp_uri],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if mount_result.returncode != 0 and 'already mounted' not in mount_result.stderr.lower():
                 steps[4]["status"] = "failed"
-                steps[4]["error"] = f"MTP URI not found for device {serial}"
+                steps[4]["error"] = f"Failed to mount: {mount_result.stderr or mount_result.stdout}"
                 return {"success": False, "steps": steps, "message": steps[4]["error"]}
+
+            import time
+            time.sleep(2)
+
+            gvfs_result = subprocess.run(
+                ['find', '/run/user/1000/gvfs', '-type', 'd', '-maxdepth', '1'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            for path in gvfs_result.stdout.strip().split('\n'):
+                if 'mtp' in path.lower():
+                    mount_path = path.strip()
+                    break
+
+            if not mount_path:
+                steps[4]["status"] = "failed"
+                steps[4]["error"] = "Device mounted but mount point not found"
+                return {"success": False, "steps": steps, "message": steps[4]["error"]}
+
+            steps[4]["status"] = "completed"
 
         except subprocess.TimeoutExpired:
             steps[4]["status"] = "failed"
@@ -834,7 +844,7 @@ async def push_profile(serial: str):
             steps[5]["status"] = "failed"
             steps[5]["error"] = f"Failed to create XAM directory: {str(e)}"
             # Unmount before returning
-            subprocess.run(['gio', 'mount', '-u', mount_path], capture_output=True)
+            subprocess.run(['gvfs-mount', '-u', mount_path], capture_output=True)
             return {"success": False, "steps": steps, "message": steps[5]["error"]}
 
         # Step 7: Copy exam_metadata.json
@@ -846,13 +856,13 @@ async def push_profile(serial: str):
             steps[6]["status"] = "failed"
             steps[6]["error"] = f"Failed to copy exam_metadata.json: {str(e)}"
             # Unmount before returning
-            subprocess.run(['gio', 'mount', '-u', mount_path], capture_output=True)
+            subprocess.run(['gvfs-mount', '-u', mount_path], capture_output=True)
             return {"success": False, "steps": steps, "message": steps[6]["error"]}
 
         # Step 8: Unmount device
         try:
             result = subprocess.run(
-                ['gio', 'mount', '-u', mount_path],
+                ['gvfs-mount', '-u', mount_path],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -878,7 +888,7 @@ async def push_profile(serial: str):
     except Exception as e:
         # Try to unmount if mount_path was created
         if mount_path:
-            subprocess.run(['gio', 'mount', '-u', mount_path], capture_output=True)
+            subprocess.run(['gvfs-mount', '-u', mount_path], capture_output=True)
 
         raise HTTPException(
             status_code=500,
