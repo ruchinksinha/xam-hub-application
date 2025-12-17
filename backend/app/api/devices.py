@@ -853,19 +853,56 @@ async def push_profile(serial: str):
                     print(f"DEBUG: Constructed device_id: {device_id}")
 
                 if device_id:
-                    # Construct MTP URI
-                    mtp_uri = f"mtp://[{device_id}]/"
-                    print(f"DEBUG: Constructed MTP URI: {mtp_uri}")
-
-                    # Try to mount it
-                    mount_result = subprocess.run(
-                        ['gio', 'mount', mtp_uri],
+                    # First, try to get list of mountable volumes with more info
+                    volumes_result = subprocess.run(
+                        ['gio', 'mount', '-li'],
                         capture_output=True,
                         text=True,
-                        timeout=15
+                        timeout=10
                     )
 
-                    print(f"DEBUG: Mount result: {mount_result.stdout}, stderr: {mount_result.stderr}")
+                    print(f"DEBUG: Available volumes:\n{volumes_result.stdout}")
+
+                    # Look for our device in the volumes list
+                    mount_command = None
+                    lines = volumes_result.stdout.split('\n')
+                    device_found = False
+                    for i, line in enumerate(lines):
+                        if device_id in line or 'Samsung' in line:
+                            device_found = True
+                            # Look for mount command in following lines
+                            for j in range(i, min(i+10, len(lines))):
+                                if 'can_mount' in lines[j].lower():
+                                    # Extract mount command
+                                    for k in range(j, min(j+5, len(lines))):
+                                        if 'mtp://' in lines[k]:
+                                            mount_command = lines[k].strip()
+                                            break
+                                if mount_command:
+                                    break
+                        if mount_command:
+                            break
+
+                    if mount_command:
+                        print(f"DEBUG: Found mount command: {mount_command}")
+                        # Try to mount it
+                        mount_result = subprocess.run(
+                            ['gio', 'mount', mount_command],
+                            capture_output=True,
+                            text=True,
+                            timeout=15
+                        )
+                        print(f"DEBUG: Mount result: {mount_result.stdout}, stderr: {mount_result.stderr}")
+                    else:
+                        # Fallback: Try gvfs-mtp to trigger auto-mount
+                        print("DEBUG: Trying alternative mount with gvfs-mtp")
+                        mount_result = subprocess.run(
+                            ['gvfs-mount', f'mtp://[{device_id}]/'],
+                            capture_output=True,
+                            text=True,
+                            timeout=15
+                        )
+                        print(f"DEBUG: gvfs-mount result: {mount_result.stdout}, stderr: {mount_result.stderr}")
 
                     time.sleep(2)
 
