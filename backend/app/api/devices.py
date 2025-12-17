@@ -285,47 +285,64 @@ async def scan_mtp_devices():
                             "product": dev.get('product')
                         })
 
-                    device_number = 0
-                    current_device_info = {}
+                    mtp_devices_found = []
 
+                    # Parse Device lines to extract VID/PID and device numbers
+                    # Format: "Device 0 (VID=0e8d and PID=2008) is a MediaTek Inc MT65xx/67xx (MTP mode)."
                     for line in mtp_output.split('\n'):
                         line = line.strip()
+                        if line.startswith('Device ') and 'VID=' in line and 'PID=' in line:
+                            import re
+                            match = re.search(r'Device (\d+) \(VID=([0-9a-f]+) and PID=([0-9a-f]+)\)', line, re.IGNORECASE)
+                            if match:
+                                device_num = int(match.group(1))
+                                vid = match.group(2).lower()
+                                pid = match.group(3).lower()
 
-                        if line.startswith('Device ') and ':' in line:
-                            if current_device_info.get('serial'):
-                                debug_info["mtp_devices"].append(current_device_info.copy())
+                                # Extract model name
+                                model_match = re.search(r'is a (.+?)\.?$', line)
+                                model = model_match.group(1) if model_match else "Unknown"
 
-                                for usb_dev in usb_devices:
-                                    serial = usb_dev.get('serial')
-                                    if serial and serial != 'N/A' and serial == current_device_info['serial']:
-                                        mtp_map[serial] = {
-                                            'mtp_index': str(current_device_info['device_num']),
-                                            'device_info': current_device_info.get('model', 'Unknown'),
-                                            'serial': serial
-                                        }
-                                        break
+                                mtp_devices_found.append({
+                                    'device_num': device_num,
+                                    'vendor_id': vid,
+                                    'product_id': pid,
+                                    'model': model
+                                })
 
-                            current_device_info = {'device_num': device_number}
-                            device_number += 1
+                    # Now match MTP devices with USB devices by VID/PID
+                    for mtp_dev in mtp_devices_found:
+                        vid = mtp_dev['vendor_id']
+                        pid = mtp_dev['product_id']
 
-                        elif 'Serial Number:' in line:
-                            serial = line.split(':', 1)[1].strip()
-                            current_device_info['serial'] = serial
-
-                        elif 'Friendly name:' in line or 'Model:' in line:
-                            model = line.split(':', 1)[1].strip()
-                            current_device_info['model'] = model
-
-                    if current_device_info.get('serial'):
-                        debug_info["mtp_devices"].append(current_device_info.copy())
-
+                        # Find matching USB device
                         for usb_dev in usb_devices:
+                            usb_vid = usb_dev.get('vendor_id', '').lower()
+                            usb_pid = usb_dev.get('product_id', '').lower()
                             serial = usb_dev.get('serial')
-                            if serial and serial != 'N/A' and serial == current_device_info['serial']:
+
+                            if usb_vid == vid and usb_pid == pid and serial and serial != 'N/A':
+                                # Match found
+                                device_info = {
+                                    'device_num': mtp_dev['device_num'],
+                                    'serial': serial,
+                                    'model': mtp_dev['model'],
+                                    'bus': usb_dev.get('bus'),
+                                    'device': usb_dev.get('device'),
+                                    'product_id': f"0x{pid}",
+                                    'vendor_id': f"0x{vid}",
+                                    'product': usb_dev.get('description', mtp_dev['model']),
+                                    'vendor': usb_dev.get('vendor', '')
+                                }
+
+                                debug_info["mtp_devices"].append(device_info)
+
                                 mtp_map[serial] = {
-                                    'mtp_index': str(current_device_info['device_num']),
-                                    'device_info': current_device_info.get('model', 'Unknown'),
-                                    'serial': serial
+                                    'mtp_index': str(mtp_dev['device_num']),
+                                    'device_info': mtp_dev['model'],
+                                    'serial': serial,
+                                    'bus': usb_dev.get('bus'),
+                                    'device': usb_dev.get('device')
                                 }
                                 break
 
