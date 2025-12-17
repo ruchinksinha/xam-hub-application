@@ -399,6 +399,41 @@ async def publish_app(serial: str):
             detail=f"Error publishing app: {str(e)}"
         )
 
+@router.post("/{serial}/push-profile")
+async def push_profile(serial: str):
+    """
+    Push device profile to a device
+    """
+    try:
+        if not Path("exam_metadata.json").exists():
+            raise HTTPException(
+                status_code=404,
+                detail="exam_metadata.json not found. Please publish a profile first from Admin Centre."
+            )
+
+        adb_devices = await ADBManager.get_connected_devices()
+        device_exists = any(d['id'] == serial for d in adb_devices)
+
+        if not device_exists:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Device {serial} not connected via ADB"
+            )
+
+        return {
+            "success": True,
+            "message": f"Profile push placeholder for device {serial}. Implementation pending.",
+            "serial": serial
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error pushing profile: {str(e)}"
+        )
+
 @router.post("/{serial}/enable-wifi-adb")
 async def enable_wifi_adb(serial: str):
     """

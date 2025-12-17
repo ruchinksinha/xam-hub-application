@@ -3,7 +3,6 @@ import React, { useState } from 'react'
 const API_URL = 'http://localhost';
 
 function DeviceTiles({ devices, onFlash, onRegister }) {
-  const [showInstructions, setShowInstructions] = useState(null)
   const [showCaptcha, setShowCaptcha] = useState(null)
   const [captchaInput, setCaptchaInput] = useState('')
   const [captchaCode, setCaptchaCode] = useState('')
@@ -40,32 +39,6 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
     }
   }
 
-  const getADBStatusIcon = (adbStatus) => {
-    switch (adbStatus) {
-      case 'authorized': return '✓'
-      case 'unauthorized': return '⚠'
-      case 'disabled': return '✕'
-      default: return '?'
-    }
-  }
-
-  const getADBStatusColor = (adbStatus) => {
-    switch (adbStatus) {
-      case 'authorized': return '#22c55e'
-      case 'unauthorized': return '#f59e0b'
-      case 'disabled': return '#ef4444'
-      default: return '#6b7280'
-    }
-  }
-
-  const getADBStatusText = (adbStatus) => {
-    switch (adbStatus) {
-      case 'authorized': return 'ADB Ready'
-      case 'unauthorized': return 'ADB Unauthorized'
-      case 'disabled': return 'ADB Disabled'
-      default: return 'Unknown'
-    }
-  }
 
   const generateCaptcha = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -122,6 +95,34 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
     } catch (error) {
       console.error('Failed to publish app:', error)
       alert('Error publishing app')
+    }
+  }
+
+  const handlePushProfile = async (device) => {
+    if (!device.serial || device.serial === 'N/A') {
+      alert('Cannot push profile without a valid serial number.')
+      return
+    }
+
+    if (!confirm(`Push device profile to ${device.description}?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/devices/${device.serial}/push-profile`, {
+        method: 'POST'
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        alert(`Profile pushed successfully to ${device.description}!`)
+      } else {
+        alert(data.detail || 'Failed to push profile')
+      }
+    } catch (error) {
+      console.error('Failed to push profile:', error)
+      alert('Error pushing profile')
     }
   }
 
@@ -209,44 +210,6 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
             <p className="device-registered-name" title="Registered name">📋 {device.registered_name}</p>
           )}
 
-          <div className="adb-status-container">
-            <span
-              className="adb-status-badge"
-              style={{
-                backgroundColor: `${getADBStatusColor(device.adb_status)}20`,
-                color: getADBStatusColor(device.adb_status),
-                border: `1px solid ${getADBStatusColor(device.adb_status)}`
-              }}
-            >
-              <span className="adb-icon">{getADBStatusIcon(device.adb_status)}</span>
-              {getADBStatusText(device.adb_status)}
-            </span>
-
-            {!device.adb_ready && (
-              <button
-                className="help-btn"
-                onClick={() => setShowInstructions(showInstructions === device.id ? null : device.id)}
-              >
-                ?
-              </button>
-            )}
-          </div>
-
-          {showInstructions === device.id && !device.adb_ready && (
-            <div className="instructions-panel">
-              <h4>Enable USB Debugging</h4>
-              <ol>
-                <li>Open <strong>Settings</strong> on your device</li>
-                <li>Go to <strong>About Tablet</strong></li>
-                <li>Tap <strong>Build Number</strong> 7 times to enable Developer Options</li>
-                <li>Go back to <strong>Settings</strong> → <strong>Developer Options</strong></li>
-                <li>Enable <strong>USB Debugging</strong></li>
-                <li>When prompted, tap <strong>Allow</strong> to authorize this computer</li>
-              </ol>
-              <p className="note">The device will automatically be ready once debugging is enabled.</p>
-            </div>
-          )}
-
           <span className={`status ${device.status}`}>
             {device.status}
           </span>
@@ -296,17 +259,27 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
               </button>
             )}
             {device.is_registered && device.serial && device.serial !== 'N/A' && device.connection_type === 'usb' && (
-              <button
-                className="publish-btn"
-                onClick={() => handlePublishApp(device)}
-                title="Publish app to this device"
-                disabled={device.connection_type !== 'usb'}
-              >
-                Publish App
-              </button>
+              <>
+                <button
+                  className="publish-btn"
+                  onClick={() => handlePublishApp(device)}
+                  title="Publish app to this device"
+                  disabled={device.connection_type !== 'usb'}
+                >
+                  Publish App
+                </button>
+                <button
+                  className="push-profile-btn"
+                  onClick={() => handlePushProfile(device)}
+                  title="Push device profile to this device"
+                  disabled={device.connection_type !== 'usb'}
+                >
+                  Push Device Profile
+                </button>
+              </>
             )}
             {device.connection_type === 'wifi' && (
-              <p className="wifi-only-message">WiFi connected - USB required for flashing</p>
+              <p className="wifi-only-message">WiFi connected - USB required for operations</p>
             )}
             {device.connection_type === 'disconnected' && device.is_registered && (
               <p className="disconnected-message">Device disconnected</p>
