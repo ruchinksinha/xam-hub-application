@@ -741,7 +741,7 @@ async def push_profile(serial: str):
         # Step 5: Mount MTP device
         try:
             result = subprocess.run(
-                ['jmtpfs', f'-device={mtp_index}', mount_path],
+                ['jmtpfs', '-o', f'device={mtp_index}', mount_path],
                 capture_output=True,
                 text=True,
                 timeout=30
