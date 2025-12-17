@@ -248,6 +248,12 @@ async def scan_mtp_devices():
     global mtp_map
     mtp_map.clear()
 
+    debug_info = {
+        "mtp_devices": [],
+        "usb_devices": [],
+        "raw_mtp_output": ""
+    }
+
     try:
         result = subprocess.run(
             ['jmtpfs', '-l'],
@@ -270,7 +276,14 @@ async def scan_mtp_devices():
 
                 if mtp_result.returncode == 0:
                     mtp_output = mtp_result.stdout
+                    debug_info["raw_mtp_output"] = mtp_output
                     usb_devices = await USBManager.get_connected_tablets()
+
+                    for dev in usb_devices:
+                        debug_info["usb_devices"].append({
+                            "serial": dev.get('serial'),
+                            "product": dev.get('product')
+                        })
 
                     device_number = 0
                     current_device_info = {}
@@ -280,6 +293,8 @@ async def scan_mtp_devices():
 
                         if line.startswith('Device ') and ':' in line:
                             if current_device_info.get('serial'):
+                                debug_info["mtp_devices"].append(current_device_info.copy())
+
                                 for usb_dev in usb_devices:
                                     serial = usb_dev.get('serial')
                                     if serial and serial != 'N/A' and serial == current_device_info['serial']:
@@ -302,6 +317,8 @@ async def scan_mtp_devices():
                             current_device_info['model'] = model
 
                     if current_device_info.get('serial'):
+                        debug_info["mtp_devices"].append(current_device_info.copy())
+
                         for usb_dev in usb_devices:
                             serial = usb_dev.get('serial')
                             if serial and serial != 'N/A' and serial == current_device_info['serial']:
@@ -315,7 +332,8 @@ async def scan_mtp_devices():
                     return {
                         "success": True,
                         "message": f"MTP map created with {len(mtp_map)} devices",
-                        "map": mtp_map
+                        "map": mtp_map,
+                        "debug": debug_info
                     }
                 else:
                     error_detail = f"Both jmtpfs and mtp-detect failed. jmtpfs: {stderr_msg or stdout_msg}, mtp-detect: {mtp_result.stderr}"

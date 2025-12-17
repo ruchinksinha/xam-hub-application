@@ -15,6 +15,7 @@ export default function ProfilePublishTab() {
   const [mtpMap, setMtpMap] = useState({});
   const [scanningMtp, setScanningMtp] = useState(false);
   const [mtpMessage, setMtpMessage] = useState('');
+  const [mtpDebug, setMtpDebug] = useState(null);
 
   useEffect(() => {
     fetchMetadata();
@@ -62,6 +63,7 @@ export default function ProfilePublishTab() {
   const handleScanMtp = async () => {
     setScanningMtp(true);
     setMtpMessage('');
+    setMtpDebug(null);
 
     try {
       const response = await fetch(`${API_URL}/api/devices/mtp-map/scan`, {
@@ -71,6 +73,7 @@ export default function ProfilePublishTab() {
       if (response.ok) {
         const data = await response.json();
         setMtpMap(data.map || {});
+        setMtpDebug(data.debug || null);
         setMtpMessage(`Successfully scanned ${data.message}`);
         setTimeout(() => setMtpMessage(''), 5000);
       } else {
@@ -349,6 +352,83 @@ export default function ProfilePublishTab() {
             }}>
               <p style={{ margin: 0, fontSize: '14px' }}>No MTP devices mapped</p>
               <p style={{ margin: '8px 0 0 0', fontSize: '13px' }}>Click "Scan MTP Devices" to create the mapping</p>
+            </div>
+          )}
+
+          {mtpDebug && (
+            <div style={{ marginTop: '24px' }}>
+              <details style={{
+                background: '#f9fafb',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                padding: '12px'
+              }}>
+                <summary style={{
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '14px',
+                  color: '#374151',
+                  userSelect: 'none'
+                }}>
+                  Debug Information
+                </summary>
+                <div style={{ marginTop: '12px' }}>
+                  <div style={{ marginBottom: '16px' }}>
+                    <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#6b7280', marginBottom: '8px' }}>
+                      USB Devices Found ({mtpDebug.usb_devices?.length || 0}):
+                    </h4>
+                    <div style={{
+                      background: '#1f2937',
+                      color: '#f3f4f6',
+                      padding: '12px',
+                      borderRadius: '6px',
+                      fontFamily: 'monospace',
+                      fontSize: '12px',
+                      overflow: 'auto'
+                    }}>
+                      <pre style={{ margin: 0 }}>{JSON.stringify(mtpDebug.usb_devices, null, 2)}</pre>
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '16px' }}>
+                    <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#6b7280', marginBottom: '8px' }}>
+                      MTP Devices Found ({mtpDebug.mtp_devices?.length || 0}):
+                    </h4>
+                    <div style={{
+                      background: '#1f2937',
+                      color: '#f3f4f6',
+                      padding: '12px',
+                      borderRadius: '6px',
+                      fontFamily: 'monospace',
+                      fontSize: '12px',
+                      overflow: 'auto'
+                    }}>
+                      <pre style={{ margin: 0 }}>{JSON.stringify(mtpDebug.mtp_devices, null, 2)}</pre>
+                    </div>
+                  </div>
+
+                  {mtpDebug.raw_mtp_output && (
+                    <div>
+                      <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#6b7280', marginBottom: '8px' }}>
+                        Raw MTP Output:
+                      </h4>
+                      <div style={{
+                        background: '#1f2937',
+                        color: '#f3f4f6',
+                        padding: '12px',
+                        borderRadius: '6px',
+                        fontFamily: 'monospace',
+                        fontSize: '12px',
+                        overflow: 'auto',
+                        maxHeight: '300px',
+                        whiteSpace: 'pre-wrap'
+                      }}>
+                        {mtpDebug.raw_mtp_output}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </details>
             </div>
           )}
         </div>
