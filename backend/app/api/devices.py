@@ -815,22 +815,53 @@ async def push_profile(serial: str):
                         print(f"DEBUG: Extracted mtp_uri: {mtp_uri}")
                         break
 
-            # If not found in mounts, try to find it in volumes and mount it
+            # If not found in mounts, try to mount the device
             if not mtp_uri:
-                # Check if there's an MTP volume available
-                if 'Volume' in mount_list_result.stdout and 'Android' in mount_list_result.stdout:
-                    # Device is available but not mounted - try to trigger mount
-                    # List MTP device to trigger auto-mount
-                    subprocess.run(
-                        ['mtp-detect'],
+                print("DEBUG: MTP not mounted, attempting to mount...")
+
+                # Use mtp-detect to find device and construct URI
+                mtp_detect_result = subprocess.run(
+                    ['mtp-detect'],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+
+                print(f"DEBUG: mtp-detect output:\n{mtp_detect_result.stdout}")
+
+                # Extract device bus and device number from mtp-detect output
+                # Looking for lines like: Device 0 (VID=xxxx and PID=xxxx) is a ...
+                # or usb:001,XXX
+                device_id = None
+                for line in mtp_detect_result.stdout.split('\n'):
+                    if 'usb:' in line:
+                        # Extract usb:bus,device format
+                        parts = line.split()
+                        for part in parts:
+                            if part.startswith('usb:'):
+                                device_id = part
+                                break
+                        if device_id:
+                            break
+
+                if device_id:
+                    # Construct MTP URI
+                    mtp_uri = f"mtp://[{device_id}]/"
+                    print(f"DEBUG: Constructed MTP URI: {mtp_uri}")
+
+                    # Try to mount it
+                    mount_result = subprocess.run(
+                        ['gio', 'mount', mtp_uri],
                         capture_output=True,
                         text=True,
-                        timeout=10
+                        timeout=15
                     )
 
-                    time.sleep(3)
+                    print(f"DEBUG: Mount result: {mount_result.stdout}, stderr: {mount_result.stderr}")
 
-                    # Check again for mount
+                    time.sleep(2)
+
+                    # Verify mount succeeded
                     mount_list_result = subprocess.run(
                         ['gio', 'mount', '-l'],
                         capture_output=True,
@@ -838,16 +869,11 @@ async def push_profile(serial: str):
                         timeout=10
                     )
 
-                    for line in mount_list_result.stdout.split('\n'):
-                        if 'mtp://' in line.lower() and '->' in line:
-                            uri_part = line.split('->')[1].strip() if '->' in line else line
-                            if 'mtp://' in uri_part:
-                                mtp_uri = uri_part.split()[0]
-                                break
+                    print(f"DEBUG: After mount, gio mount -l output:\n{mount_list_result.stdout}")
 
             if not mtp_uri:
                 steps[4]["status"] = "failed"
-                steps[4]["error"] = "MTP device not mounted and auto-mount failed"
+                steps[4]["error"] = "MTP device not mounted and auto-mount failed. Please ensure device is unlocked and USB debugging is enabled."
                 return {"success": False, "steps": steps, "message": steps[4]["error"]}
 
             # Now find the GVFS mount path
