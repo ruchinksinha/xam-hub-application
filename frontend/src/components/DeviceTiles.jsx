@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import ProgressModal from './ProgressModal'
 
 const API_URL = 'http://localhost';
 
@@ -6,6 +7,12 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
   const [showCaptcha, setShowCaptcha] = useState(null)
   const [captchaInput, setCaptchaInput] = useState('')
   const [captchaCode, setCaptchaCode] = useState('')
+  const [progressModal, setProgressModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    steps: []
+  })
 
   const handleRegister = async (device) => {
     if (!device.serial || device.serial === 'N/A') {
@@ -108,6 +115,13 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
       return
     }
 
+    setProgressModal({
+      isOpen: true,
+      title: 'Pushing Device Profile',
+      message: 'Processing...',
+      steps: []
+    })
+
     try {
       const response = await fetch(`${API_URL}/api/devices/${device.serial}/push-profile`, {
         method: 'POST'
@@ -115,14 +129,29 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
 
       const data = await response.json()
 
-      if (response.ok) {
-        alert(`Profile pushed successfully to ${device.description}!`)
+      if (response.ok && data.success) {
+        setProgressModal({
+          isOpen: true,
+          title: 'Push Device Profile',
+          message: data.message,
+          steps: data.steps || []
+        })
       } else {
-        alert(data.detail || 'Failed to push profile')
+        setProgressModal({
+          isOpen: true,
+          title: 'Push Device Profile',
+          message: data.message || data.detail || 'Failed to push profile',
+          steps: data.steps || []
+        })
       }
     } catch (error) {
       console.error('Failed to push profile:', error)
-      alert('Error pushing profile')
+      setProgressModal({
+        isOpen: true,
+        title: 'Push Device Profile',
+        message: `Error: ${error.message}`,
+        steps: []
+      })
     }
   }
 
@@ -287,6 +316,14 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
           </div>
         </div>
       ))}
+
+      <ProgressModal
+        isOpen={progressModal.isOpen}
+        title={progressModal.title}
+        message={progressModal.message}
+        steps={progressModal.steps}
+        onClose={() => setProgressModal({ isOpen: false, title: '', message: '', steps: [] })}
+      />
     </div>
   )
 }
