@@ -349,39 +349,74 @@ async def scan_mtp_devices():
                 )
 
         mtp_output = result.stdout
+        debug_info["raw_mtp_output"] = mtp_output
+
         if not mtp_output or not mtp_output.strip():
             return {
                 "success": True,
                 "message": "No MTP devices found",
-                "map": {}
+                "map": {},
+                "debug": debug_info
             }
 
         usb_devices = await USBManager.get_connected_tablets()
 
+        for dev in usb_devices:
+            debug_info["usb_devices"].append({
+                "bus": dev.get('bus'),
+                "device": dev.get('device'),
+                "serial": dev.get('serial'),
+                "product": dev.get('description')
+            })
+
         for line in mtp_output.split('\n'):
             line = line.strip()
-            if not line or line.startswith('Available') or line.startswith('Use'):
+            if not line or line.startswith('Available') or line.startswith('Use') or line.startswith('Device'):
                 continue
 
-            parts = line.split(',')
-            if len(parts) >= 2:
-                mtp_index = parts[0].strip()
-                device_info = ','.join(parts[1:]).strip()
+            parts = [p.strip() for p in line.split(',')]
+            if len(parts) >= 6:
+                bus_location = parts[0]
+                dev_num = parts[1]
+                product_id = parts[2]
+                vendor_id = parts[3]
+                product = parts[4]
+                vendor = parts[5]
+
+                mtp_device_info = {
+                    'bus': bus_location,
+                    'device': dev_num,
+                    'product_id': product_id,
+                    'vendor_id': vendor_id,
+                    'product': product,
+                    'vendor': vendor
+                }
+                debug_info["mtp_devices"].append(mtp_device_info)
 
                 for usb_dev in usb_devices:
-                    serial = usb_dev.get('serial')
-                    if serial and serial != 'N/A' and serial in device_info:
-                        mtp_map[serial] = {
-                            'mtp_index': mtp_index,
-                            'device_info': device_info,
-                            'serial': serial
-                        }
-                        break
+                    usb_bus = int(usb_dev.get('bus', '0'))
+                    usb_device = int(usb_dev.get('device', '0'))
+                    mtp_bus = int(bus_location)
+                    mtp_device = int(dev_num)
+
+                    if usb_bus == mtp_bus and usb_device == mtp_device:
+                        serial = usb_dev.get('serial')
+                        if serial and serial != 'N/A':
+                            mtp_index = parts[0].strip()
+                            device_info = f"{vendor} {product}"
+
+                            mtp_map[serial] = {
+                                'mtp_index': mtp_index,
+                                'device_info': device_info,
+                                'serial': serial
+                            }
+                            break
 
         return {
             "success": True,
             "message": f"MTP map created with {len(mtp_map)} devices",
-            "map": mtp_map
+            "map": mtp_map,
+            "debug": debug_info
         }
 
     except subprocess.TimeoutExpired:
