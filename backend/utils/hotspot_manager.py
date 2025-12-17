@@ -118,12 +118,27 @@ class HotspotManager:
             if m:
                 info["ip_address"] = m.group(1)
 
-            # Client count via dnsmasq
+            # Get real-time connected client count using iw station dump
             try:
-                with open("/var/lib/misc/dnsmasq.leases") as f:
-                    info["connected_devices"] = len(f.readlines())
+                iw_result = subprocess.run(
+                    ["iw", "dev", iface, "station", "dump"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+
+                if iw_result.returncode == 0:
+                    # Count number of "Station" lines which represent active connections
+                    connected_count = iw_result.stdout.count('Station ')
+                    info["connected_devices"] = connected_count
+                else:
+                    # Fallback to dnsmasq leases if iw fails
+                    with open("/var/lib/misc/dnsmasq.leases") as f:
+                        info["connected_devices"] = len(f.readlines())
             except FileNotFoundError:
                 pass
+            except Exception as e:
+                print(f"Error counting connected devices on {iface}: {e}")
 
             aps.append(info)
 
