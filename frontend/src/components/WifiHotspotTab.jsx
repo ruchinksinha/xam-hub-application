@@ -247,22 +247,34 @@ export default function WifiHotspotTab() {
                     }}>
                       Hotspot {index + 1}
                     </h3>
-                    <div className="info-grid">
-                      <div className="info-item">
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div className="info-item" style={{ width: '100%' }}>
                         <span className="label">SSID:</span>
-                        <span className="value">{ap.ssid || 'N/A'}</span>
+                        <span className="value" style={{
+                          wordBreak: 'break-all',
+                          display: 'block',
+                          marginTop: '4px'
+                        }}>{ap.ssid || 'N/A'}</span>
                       </div>
-                      <div className="info-item">
-                        <span className="label">Interface:</span>
-                        <span className="value">{ap.interface || 'N/A'}</span>
-                      </div>
-                      <div className="info-item">
-                        <span className="label">Gateway IP:</span>
-                        <span className="value">{ap.ip_address || 'N/A'}</span>
-                      </div>
-                      <div className="info-item">
-                        <span className="label">Connected Devices:</span>
-                        <span className="value">{ap.connected_devices || 0}</span>
+
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gap: '12px'
+                      }}>
+                        <div className="info-item">
+                          <span className="label">Interface:</span>
+                          <span className="value">{ap.interface || 'N/A'}</span>
+                        </div>
+                        <div className="info-item">
+                          <span className="label">Gateway IP:</span>
+                          <span className="value">{ap.ip_address || 'N/A'}</span>
+                        </div>
+                        <div className="info-item">
+                          <span className="label">Connected:</span>
+                          <span className="value">{ap.connected_devices || 0}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
