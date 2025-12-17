@@ -740,29 +740,82 @@ async def push_profile(serial: str):
                 return {"success": False, "steps": steps, "message": steps[2]["error"]}
             steps[2]["status"] = "completed"
 
-        # Step 4: Create mount directory
+        # Step 4: Clean up any stuck mounts
         mount_path = f"/mnt/mtp/{serial}"
         try:
-            Path(mount_path).mkdir(parents=True, exist_ok=True)
+            subprocess.run(['fusermount', '-uz', mount_path], capture_output=True, timeout=10)
             steps[3]["status"] = "completed"
-        except Exception as e:
-            steps[3]["status"] = "failed"
-            steps[3]["error"] = f"Failed to create mount directory: {str(e)}"
-            return {"success": False, "steps": steps, "message": steps[3]["error"]}
+        except Exception:
+            pass
 
-        # Step 5: Mount MTP device
+        # Step 5: Mount MTP device using gio
         try:
             result = subprocess.run(
-                ['jmtpfs', f'-device={mtp_index}', mount_path],
+                ['gio', 'mount', '-li'],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=10
             )
-            if result.returncode != 0:
+
+            mtp_uri = None
+            for line in result.stdout.split('\n'):
+                if 'mtp://' in line and serial in line:
+                    import re
+                    uri_match = re.search(r'(mtp://[^\s]+)', line)
+                    if uri_match:
+                        mtp_uri = uri_match.group(1)
+                        break
+
+            if not mtp_uri:
+                for line in result.stdout.split('\n'):
+                    if 'mtp://' in line:
+                        import re
+                        uri_match = re.search(r'(mtp://[^\s]+)', line)
+                        if uri_match:
+                            mtp_uri = uri_match.group(1)
+                            break
+
+            if mtp_uri:
+                mount_result = subprocess.run(
+                    ['gio', 'mount', mtp_uri],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                if mount_result.returncode != 0 and 'already mounted' not in mount_result.stderr.lower():
+                    steps[4]["status"] = "failed"
+                    steps[4]["error"] = f"Failed to mount via gio: {mount_result.stderr or mount_result.stdout}"
+                    return {"success": False, "steps": steps, "message": steps[4]["error"]}
+
+                gvfs_result = subprocess.run(
+                    ['find', '/run/user/1000/gvfs', '-type', 'd', '-name', f'*{serial}*'],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if gvfs_result.stdout.strip():
+                    mount_path = gvfs_result.stdout.strip().split('\n')[0]
+                else:
+                    gvfs_result = subprocess.run(
+                        ['ls', '/run/user/1000/gvfs'],
+                        capture_output=True,
+                        text=True,
+                        timeout=10
+                    )
+                    mtp_mounts = [d for d in gvfs_result.stdout.split('\n') if 'mtp' in d.lower()]
+                    if mtp_mounts:
+                        mount_path = f"/run/user/1000/gvfs/{mtp_mounts[0]}"
+                    else:
+                        steps[4]["status"] = "failed"
+                        steps[4]["error"] = "Device mounted but mount point not found"
+                        return {"success": False, "steps": steps, "message": steps[4]["error"]}
+
+                steps[4]["status"] = "completed"
+            else:
                 steps[4]["status"] = "failed"
-                steps[4]["error"] = f"Failed to mount device: {result.stderr or result.stdout}"
+                steps[4]["error"] = f"MTP URI not found for device {serial}"
                 return {"success": False, "steps": steps, "message": steps[4]["error"]}
-            steps[4]["status"] = "completed"
+
         except subprocess.TimeoutExpired:
             steps[4]["status"] = "failed"
             steps[4]["error"] = "Timeout while mounting MTP device"
@@ -781,7 +834,7 @@ async def push_profile(serial: str):
             steps[5]["status"] = "failed"
             steps[5]["error"] = f"Failed to create XAM directory: {str(e)}"
             # Unmount before returning
-            subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
+            subprocess.run(['gio', 'mount', '-u', mount_path], capture_output=True)
             return {"success": False, "steps": steps, "message": steps[5]["error"]}
 
         # Step 7: Copy exam_metadata.json
@@ -793,13 +846,13 @@ async def push_profile(serial: str):
             steps[6]["status"] = "failed"
             steps[6]["error"] = f"Failed to copy exam_metadata.json: {str(e)}"
             # Unmount before returning
-            subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
+            subprocess.run(['gio', 'mount', '-u', mount_path], capture_output=True)
             return {"success": False, "steps": steps, "message": steps[6]["error"]}
 
         # Step 8: Unmount device
         try:
             result = subprocess.run(
-                ['fusermount', '-u', mount_path],
+                ['gio', 'mount', '-u', mount_path],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -825,7 +878,7 @@ async def push_profile(serial: str):
     except Exception as e:
         # Try to unmount if mount_path was created
         if mount_path:
-            subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
+            subprocess.run(['gio', 'mount', '-u', mount_path], capture_output=True)
 
         raise HTTPException(
             status_code=500,
