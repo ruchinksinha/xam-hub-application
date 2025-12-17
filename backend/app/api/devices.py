@@ -408,7 +408,9 @@ async def scan_mtp_devices():
                             mtp_map[serial] = {
                                 'mtp_index': mtp_index,
                                 'device_info': device_info,
-                                'serial': serial
+                                'serial': serial,
+                                'bus': bus_location,
+                                'device': dev_num
                             }
                             break
 
@@ -739,7 +741,7 @@ async def push_profile(serial: str):
         # Step 5: Mount MTP device
         try:
             result = subprocess.run(
-                ['jmtpfs', f'--device={mtp_index}', mount_path],
+                ['jmtpfs', f'-device={mtp_index}', mount_path],
                 capture_output=True,
                 text=True,
                 timeout=30

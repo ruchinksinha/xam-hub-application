@@ -316,6 +316,12 @@ export default function ProfilePublishTab() {
                         Serial Number
                       </th>
                       <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#374151' }}>
+                        Bus
+                      </th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#374151' }}>
+                        Device
+                      </th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#374151' }}>
                         MTP Index
                       </th>
                       <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#374151' }}>
@@ -328,6 +334,12 @@ export default function ProfilePublishTab() {
                       <tr key={serial} style={{ borderBottom: '1px solid #e5e7eb' }}>
                         <td style={{ padding: '12px', fontSize: '13px', fontFamily: 'monospace', color: '#1f2937' }}>
                           {serial}
+                        </td>
+                        <td style={{ padding: '12px', fontSize: '13px', fontFamily: 'monospace', color: '#6b7280' }}>
+                          {info.bus || 'N/A'}
+                        </td>
+                        <td style={{ padding: '12px', fontSize: '13px', fontFamily: 'monospace', color: '#6b7280' }}>
+                          {info.device || 'N/A'}
                         </td>
                         <td style={{ padding: '12px', fontSize: '13px', fontFamily: 'monospace', color: '#059669' }}>
                           {info.mtp_index}
