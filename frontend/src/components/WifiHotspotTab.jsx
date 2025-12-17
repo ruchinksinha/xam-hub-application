@@ -32,7 +32,24 @@ export default function WifiHotspotTab() {
       ]);
       const statusData = await statusRes.json();
       const clientsData = await clientsRes.json();
-      setHotspotStatus(statusData);
+
+      // Transform new API structure to maintain backwards compatibility
+      // New structure: { active: bool, aps: [{interface, ssid, ip_address, connected_devices}] }
+      // Old structure: { active: bool, ssid, interface, ip_address, connected_devices }
+      if (statusData.aps && Array.isArray(statusData.aps)) {
+        const firstAp = statusData.aps[0] || {};
+        setHotspotStatus({
+          active: statusData.active,
+          ssid: firstAp.ssid || '',
+          interface: firstAp.interface || '',
+          ip_address: firstAp.ip_address || '',
+          connected_devices: firstAp.connected_devices || 0
+        });
+      } else {
+        // Fallback to old structure if aps array doesn't exist
+        setHotspotStatus(statusData);
+      }
+
       setWifiClients(clientsData.clients || []);
       setError(null);
     } catch (error) {

@@ -69,118 +69,68 @@ class HotspotManager:
             }
 
     def get_status(self):
-        try:
-            config = self._load_config()
-            expected_ssid = config.get("ssid", "AndroidFlashHub")
-            expected_interface = config.get("interface", "wlan0")
+        import os
 
-            # Check if our configured SSID connection is active
-            result = subprocess.run(
-                ["nmcli", "-t", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active"],
+        aps = []
+
+        # Discover Wi-Fi interfaces
+        iw = subprocess.run(
+            ["iw", "dev"],
+            capture_output=True,
+            text=True
+        )
+
+        current_iface = None
+        iface_info = {}
+
+        for line in iw.stdout.splitlines():
+            line = line.strip()
+
+            if line.startswith("Interface"):
+                current_iface = line.split()[1]
+                iface_info[current_iface] = {
+                    "interface": current_iface,
+                    "ssid": "",
+                    "active": False,
+                    "ip_address": "",
+                    "connected_devices": 0
+                }
+
+            elif current_iface and line.startswith("type"):
+                if "AP" in line:
+                    iface_info[current_iface]["active"] = True
+
+            elif current_iface and line.startswith("ssid"):
+                iface_info[current_iface]["ssid"] = line.split(None, 1)[1]
+
+        # For each AP interface, get IP and client count
+        for iface, info in iface_info.items():
+            if not info["active"]:
+                continue
+
+            # IP address
+            ip = subprocess.run(
+                ["ip", "addr", "show", iface],
                 capture_output=True,
-                text=True,
-                timeout=5
+                text=True
             )
+            m = re.search(r'inet (\d+\.\d+\.\d+\.\d+)', ip.stdout)
+            if m:
+                info["ip_address"] = m.group(1)
 
-            active = False
-            ssid = ""
-            interface = ""
+            # Client count via dnsmasq
+            try:
+                with open("/var/lib/misc/dnsmasq.leases") as f:
+                    info["connected_devices"] = len(f.readlines())
+            except FileNotFoundError:
+                pass
 
-            # Look for WiFi connections in AP mode
-            for line in result.stdout.split('\n'):
-                if not line.strip():
-                    continue
+            aps.append(info)
 
-                parts = line.split(':')
-                if len(parts) >= 3:
-                    conn_name = parts[0]
-                    conn_type = parts[1]
-                    conn_device = parts[2]
-
-                    # Check if it's a wifi connection
-                    if conn_type in ['802-11-wireless', 'wifi']:
-                        # Check if it matches our expected SSID or is a hotspot
-                        if (conn_name == expected_ssid or
-                            'hotspot' in conn_name.lower() or
-                            'ap' in conn_name.lower()):
-                            ssid = conn_name
-                            interface = conn_device
-                            active = True
-                            break
-
-            # Double-check by looking at device mode
-            if interface:
-                try:
-                    iw_result = subprocess.run(
-                        ["iw", "dev", interface, "info"],
-                        capture_output=True,
-                        text=True,
-                        timeout=5
-                    )
-                    if "type AP" not in iw_result.stdout:
-                        active = False
-                except:
-                    pass
-
-            ip_address = ""
-            if active and interface:
-                try:
-                    ip_result = subprocess.run(
-                        ["ip", "addr", "show", interface],
-                        capture_output=True,
-                        text=True,
-                        timeout=5
-                    )
-                    ip_match = re.search(r'inet (\d+\.\d+\.\d+\.\d+)', ip_result.stdout)
-                    if ip_match:
-                        ip_address = ip_match.group(1)
-                except:
-                    pass
-
-            connected_devices = 0
-            if active:
-                try:
-                    lease_files = [
-                        "/var/lib/NetworkManager/dnsmasq-*.leases",
-                        "/var/lib/misc/dnsmasq.leases"
-                    ]
-                    for lease_pattern in lease_files:
-                        lease_result = subprocess.run(
-                            ["bash", "-c", f"cat {lease_pattern} 2>/dev/null | wc -l"],
-                            capture_output=True,
-                            text=True,
-                            timeout=5
-                        )
-                        if lease_result.returncode == 0:
-                            connected_devices = int(lease_result.stdout.strip() or "0")
-                            if connected_devices > 0:
-                                break
-                except:
-                    pass
-
-            if not ssid:
-                ssid = expected_ssid
-            if not interface:
-                interface = expected_interface
-
-            return {
-                "active": active,
-                "ssid": ssid,
-                "interface": interface,
-                "ip_address": ip_address,
-                "connected_devices": connected_devices
-            }
-
-        except Exception as e:
-            print(f"Error getting hotspot status: {e}")
-            config = self._load_config()
-            return {
-                "active": False,
-                "ssid": config.get("ssid", "AndroidFlashHub"),
-                "interface": config.get("interface", "wlan0"),
-                "ip_address": "",
-                "connected_devices": 0
-            }
+        return {
+            "active": len(aps) > 0,
+            "aps": aps
+        }
 
     def start(self):
         try:
@@ -331,40 +281,40 @@ class HotspotManager:
             if not status["active"]:
                 return {"success": True, "message": "Hotspot already stopped"}
 
+            # Stop all active AP interfaces
             config = self._load_config()
-            ssid = config.get("ssid", "AndroidFlashHub")
-            interface = status.get("interface", "wlan0")
+            stopped_any = False
 
-            # Try stopping by connection name (configured SSID)
-            result = subprocess.run(
-                ["nmcli", "connection", "down", "id", ssid],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
+            for ap in status.get("aps", []):
+                interface = ap.get("interface")
+                if not interface:
+                    continue
 
-            # Fallback: try "Hotspot" name
-            if result.returncode != 0:
-                result = subprocess.run(
-                    ["nmcli", "connection", "down", "id", "Hotspot"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
+                # Stop hostapd for this interface
+                try:
+                    result = subprocess.run(
+                        ["pkill", "-f", f"hostapd.*{interface}"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
 
-            # Last resort: disconnect the interface
-            if result.returncode != 0:
-                result = subprocess.run(
-                    ["nmcli", "device", "disconnect", interface],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
+                    # Also try to down the interface
+                    subprocess.run(
+                        ["ip", "link", "set", interface, "down"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
 
-            if result.returncode == 0:
-                return {"success": True}
+                    stopped_any = True
+                except Exception as e:
+                    print(f"Error stopping AP on {interface}: {e}")
+
+            if stopped_any:
+                return {"success": True, "message": "Hotspot stopped"}
             else:
-                return {"success": False, "error": result.stderr or "Unknown error"}
+                return {"success": False, "error": "No hotspot interfaces found to stop"}
 
         except subprocess.TimeoutExpired:
             return {"success": False, "error": "Command timed out"}
@@ -436,71 +386,76 @@ class HotspotManager:
             if not status["active"]:
                 return []
 
-            interface = status.get("interface", "wlan0")
+            # Iterate through all active AP interfaces
+            for ap in status.get("aps", []):
+                interface = ap.get("interface")
+                if not interface:
+                    continue
 
-            # Step 1: Get actively connected WiFi stations using iw
-            iw_result = subprocess.run(
-                ["iw", "dev", interface, "station", "dump"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-
-            if iw_result.returncode != 0:
-                # Fallback to ARP table if iw fails
-                return self._get_clients_from_arp(interface)
-
-            # Parse iw station dump output
-            active_mac_addresses = []
-            current_mac = None
-
-            for line in iw_result.stdout.split('\n'):
-                line = line.strip()
-                if line.startswith('Station '):
-                    # Extract MAC address: "Station aa:bb:cc:dd:ee:ff (on wlan0)"
-                    parts = line.split()
-                    if len(parts) >= 2:
-                        current_mac = parts[1].lower()
-                        active_mac_addresses.append(current_mac)
-
-            if not active_mac_addresses:
-                return []
-
-            # Step 2: Get IP addresses from DHCP leases for active MACs only
-            lease_files = [
-                "/var/lib/NetworkManager/dnsmasq-*.leases",
-                "/var/lib/misc/dnsmasq.leases"
-            ]
-
-            dhcp_map = {}
-            for lease_pattern in lease_files:
-                result = subprocess.run(
-                    ["bash", "-c", f"cat {lease_pattern} 2>/dev/null"],
+                # Step 1: Get actively connected WiFi stations using iw
+                iw_result = subprocess.run(
+                    ["iw", "dev", interface, "station", "dump"],
                     capture_output=True,
                     text=True,
                     timeout=5
                 )
 
-                if result.returncode == 0 and result.stdout.strip():
-                    for line in result.stdout.strip().split('\n'):
-                        parts = line.split()
-                        if len(parts) >= 3:
-                            # Format: timestamp mac_address ip_address hostname
-                            mac = parts[1].lower()
-                            dhcp_map[mac] = {
-                                'ip_address': parts[2],
-                                'hostname': parts[3] if len(parts) > 3 else ''
-                            }
-                    break
+                if iw_result.returncode != 0:
+                    # Fallback to ARP table if iw fails
+                    connected_clients.extend(self._get_clients_from_arp(interface))
+                    continue
 
-            # Step 3: Combine active MACs with DHCP info
-            for mac in active_mac_addresses:
-                dhcp_info = dhcp_map.get(mac, {})
-                connected_clients.append({
-                    'mac_address': mac,
-                    'ip_address': dhcp_info.get('ip_address', 'N/A'),
-                    'hostname': dhcp_info.get('hostname', '')
-                })
+                # Parse iw station dump output
+                active_mac_addresses = []
+                current_mac = None
+
+                for line in iw_result.stdout.split('\n'):
+                    line = line.strip()
+                    if line.startswith('Station '):
+                        # Extract MAC address: "Station aa:bb:cc:dd:ee:ff (on wlan0)"
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            current_mac = parts[1].lower()
+                            active_mac_addresses.append(current_mac)
+
+                if not active_mac_addresses:
+                    continue
+
+                # Step 2: Get IP addresses from DHCP leases for active MACs only
+                lease_files = [
+                    "/var/lib/NetworkManager/dnsmasq-*.leases",
+                    "/var/lib/misc/dnsmasq.leases"
+                ]
+
+                dhcp_map = {}
+                for lease_pattern in lease_files:
+                    result = subprocess.run(
+                        ["bash", "-c", f"cat {lease_pattern} 2>/dev/null"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+
+                    if result.returncode == 0 and result.stdout.strip():
+                        for line in result.stdout.strip().split('\n'):
+                            parts = line.split()
+                            if len(parts) >= 3:
+                                # Format: timestamp mac_address ip_address hostname
+                                mac = parts[1].lower()
+                                dhcp_map[mac] = {
+                                    'ip_address': parts[2],
+                                    'hostname': parts[3] if len(parts) > 3 else ''
+                                }
+                        break
+
+                # Step 3: Combine active MACs with DHCP info
+                for mac in active_mac_addresses:
+                    dhcp_info = dhcp_map.get(mac, {})
+                    connected_clients.append({
+                        'mac_address': mac,
+                        'ip_address': dhcp_info.get('ip_address', 'N/A'),
+                        'hostname': dhcp_info.get('hostname', '')
+                    })
 
             return connected_clients
 
