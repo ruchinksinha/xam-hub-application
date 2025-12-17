@@ -12,9 +12,13 @@ export default function ProfilePublishTab() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
+  const [mtpMap, setMtpMap] = useState({});
+  const [scanningMtp, setScanningMtp] = useState(false);
+  const [mtpMessage, setMtpMessage] = useState('');
 
   useEffect(() => {
     fetchMetadata();
+    fetchMtpMap();
   }, []);
 
   const fetchMetadata = async () => {
@@ -40,6 +44,44 @@ export default function ProfilePublishTab() {
       setError('Failed to connect to server');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMtpMap = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/devices/mtp-map`);
+      if (response.ok) {
+        const data = await response.json();
+        setMtpMap(data.map || {});
+      }
+    } catch (err) {
+      console.error('Failed to fetch MTP map:', err);
+    }
+  };
+
+  const handleScanMtp = async () => {
+    setScanningMtp(true);
+    setMtpMessage('');
+
+    try {
+      const response = await fetch(`${API_URL}/api/devices/mtp-map/scan`, {
+        method: 'POST'
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMtpMap(data.map || {});
+        setMtpMessage(`Successfully scanned ${data.message}`);
+        setTimeout(() => setMtpMessage(''), 5000);
+      } else {
+        const data = await response.json();
+        setMtpMessage(`Error: ${data.detail || 'Failed to scan MTP devices'}`);
+      }
+    } catch (err) {
+      console.error('Failed to scan MTP devices:', err);
+      setMtpMessage('Error: Failed to connect to server');
+    } finally {
+      setScanningMtp(false);
     }
   };
 
@@ -117,7 +159,7 @@ export default function ProfilePublishTab() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', marginBottom: '32px' }}>
         <div className="admin-card" style={{ margin: 0 }}>
           <div className="card-header">
             <h2>Configuration</h2>
@@ -218,6 +260,97 @@ export default function ProfilePublishTab() {
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="admin-card">
+        <div className="card-header">
+          <h2>MTP Device Map</h2>
+        </div>
+        <div className="card-content">
+          <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '16px' }}>
+            Create a USB Serial to MTP Index mapping to enable profile push functionality. This map will be automatically cleared when any device is disconnected.
+          </p>
+
+          {mtpMessage && (
+            <div style={{
+              background: mtpMessage.includes('Error') ? '#fee2e2' : '#d1fae5',
+              border: `1px solid ${mtpMessage.includes('Error') ? '#fca5a5' : '#6ee7b7'}`,
+              borderRadius: '8px',
+              padding: '12px',
+              marginBottom: '16px',
+              color: mtpMessage.includes('Error') ? '#991b1b' : '#065f46',
+              fontSize: '14px'
+            }}>
+              {mtpMessage}
+            </div>
+          )}
+
+          <button
+            onClick={handleScanMtp}
+            disabled={scanningMtp}
+            className="btn-primary"
+            style={{ marginBottom: '20px' }}
+          >
+            {scanningMtp ? 'Scanning MTP Devices...' : 'Scan MTP Devices'}
+          </button>
+
+          {Object.keys(mtpMap).length > 0 ? (
+            <div>
+              <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '12px' }}>
+                Detected Devices ({Object.keys(mtpMap).length}):
+              </h4>
+              <div style={{
+                background: '#f9fafb',
+                borderRadius: '8px',
+                overflow: 'hidden',
+                border: '1px solid #e5e7eb'
+              }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#f3f4f6', borderBottom: '1px solid #e5e7eb' }}>
+                      <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#374151' }}>
+                        Serial Number
+                      </th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#374151' }}>
+                        MTP Index
+                      </th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontSize: '13px', fontWeight: '600', color: '#374151' }}>
+                        Device Info
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(mtpMap).map(([serial, info]) => (
+                      <tr key={serial} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: '12px', fontSize: '13px', fontFamily: 'monospace', color: '#1f2937' }}>
+                          {serial}
+                        </td>
+                        <td style={{ padding: '12px', fontSize: '13px', fontFamily: 'monospace', color: '#059669' }}>
+                          {info.mtp_index}
+                        </td>
+                        <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>
+                          {info.device_info}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div style={{
+              textAlign: 'center',
+              padding: '32px',
+              color: '#9ca3af',
+              background: '#f9fafb',
+              borderRadius: '8px',
+              border: '1px solid #e5e7eb'
+            }}>
+              <p style={{ margin: 0, fontSize: '14px' }}>No MTP devices mapped</p>
+              <p style={{ margin: '8px 0 0 0', fontSize: '13px' }}>Click "Scan MTP Devices" to create the mapping</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

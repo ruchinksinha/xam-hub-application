@@ -14,6 +14,9 @@ hotspot_manager = HotspotManager()
 
 router = APIRouter(prefix="/api/devices", tags=["devices"])
 
+mtp_map = {}
+previous_connected_serials = set()
+
 @router.get("")
 async def get_devices():
     usb_devices = await USBManager.get_connected_tablets()
@@ -222,12 +225,105 @@ async def get_devices():
                     devices_dict[serial] = disconnected_device
                     json_storage.update_connection_status(serial, False)
 
+    global previous_connected_serials, mtp_map
+    current_serials = connected_serials
+
+    if previous_connected_serials and current_serials < previous_connected_serials:
+        disconnected = previous_connected_serials - current_serials
+        if disconnected:
+            mtp_map.clear()
+            print(f"Devices disconnected: {disconnected}. MTP map cleared.")
+
+    previous_connected_serials = current_serials.copy()
+
     return {"devices": list(devices_dict.values())}
 
 @router.get("/{bus}/{device}")
 async def get_device_details(bus: str, device: str):
     details = await USBManager.get_device_details(bus, device)
     return {"details": details}
+
+@router.post("/mtp-map/scan")
+async def scan_mtp_devices():
+    global mtp_map
+    mtp_map.clear()
+
+    try:
+        result = subprocess.run(
+            ['jmtpfs', '--listdevices'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode != 0:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to list MTP devices"
+            )
+
+        mtp_output = result.stdout
+        usb_devices = await USBManager.get_connected_tablets()
+
+        for line in mtp_output.split('\n'):
+            line = line.strip()
+            if not line or line.startswith('Available') or line.startswith('Use'):
+                continue
+
+            parts = line.split(',')
+            if len(parts) >= 2:
+                mtp_index = parts[0].strip()
+                device_info = ','.join(parts[1:]).strip()
+
+                for usb_dev in usb_devices:
+                    serial = usb_dev.get('serial')
+                    if serial and serial != 'N/A' and serial in device_info:
+                        mtp_map[serial] = {
+                            'mtp_index': mtp_index,
+                            'device_info': device_info,
+                            'serial': serial
+                        }
+                        break
+
+        return {
+            "success": True,
+            "message": f"MTP map created with {len(mtp_map)} devices",
+            "map": mtp_map
+        }
+
+    except subprocess.TimeoutExpired:
+        raise HTTPException(
+            status_code=500,
+            detail="Timeout while scanning MTP devices"
+        )
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=500,
+            detail="jmtpfs not installed on system"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error scanning MTP devices: {str(e)}"
+        )
+
+@router.get("/mtp-map")
+async def get_mtp_map():
+    global mtp_map
+    return {
+        "success": True,
+        "map": mtp_map,
+        "count": len(mtp_map)
+    }
+
+@router.delete("/mtp-map")
+async def clear_mtp_map():
+    global mtp_map
+    mtp_map.clear()
+    return {
+        "success": True,
+        "message": "MTP map cleared"
+    }
 
 @router.get("/os/check")
 async def check_os_availability():
@@ -427,43 +523,49 @@ async def push_profile(serial: str):
             return {"success": False, "steps": steps, "message": steps[0]["error"]}
         steps[0]["status"] = "completed"
 
-        # Step 2: List MTP devices
-        try:
-            result = subprocess.run(
-                ['jmtpfs', '--listdevices'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            steps[1]["status"] = "completed"
-            mtp_output = result.stdout
-        except subprocess.TimeoutExpired:
-            steps[1]["status"] = "failed"
-            steps[1]["error"] = "Timeout while listing MTP devices"
-            return {"success": False, "steps": steps, "message": steps[1]["error"]}
-        except FileNotFoundError:
-            steps[1]["status"] = "failed"
-            steps[1]["error"] = "jmtpfs not installed on system"
-            return {"success": False, "steps": steps, "message": steps[1]["error"]}
-        except Exception as e:
-            steps[1]["status"] = "failed"
-            steps[1]["error"] = f"Error listing MTP devices: {str(e)}"
-            return {"success": False, "steps": steps, "message": steps[1]["error"]}
-
-        # Step 3: Identify MTP device index
+        # Step 2 & 3: Get MTP device index from map or scan
+        global mtp_map
         mtp_index = None
-        for line in mtp_output.split('\n'):
-            if serial in line:
-                parts = line.split(',')
-                if len(parts) > 0:
-                    mtp_index = parts[0].strip()
-                    break
 
-        if mtp_index is None:
-            steps[2]["status"] = "failed"
-            steps[2]["error"] = f"Device {serial} not found in MTP devices list"
-            return {"success": False, "steps": steps, "message": steps[2]["error"]}
-        steps[2]["status"] = "completed"
+        if serial in mtp_map:
+            mtp_index = mtp_map[serial]['mtp_index']
+            steps[1]["status"] = "completed"
+            steps[2]["status"] = "completed"
+        else:
+            try:
+                result = subprocess.run(
+                    ['jmtpfs', '--listdevices'],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                steps[1]["status"] = "completed"
+                mtp_output = result.stdout
+            except subprocess.TimeoutExpired:
+                steps[1]["status"] = "failed"
+                steps[1]["error"] = "Timeout while listing MTP devices"
+                return {"success": False, "steps": steps, "message": steps[1]["error"]}
+            except FileNotFoundError:
+                steps[1]["status"] = "failed"
+                steps[1]["error"] = "jmtpfs not installed on system"
+                return {"success": False, "steps": steps, "message": steps[1]["error"]}
+            except Exception as e:
+                steps[1]["status"] = "failed"
+                steps[1]["error"] = f"Error listing MTP devices: {str(e)}"
+                return {"success": False, "steps": steps, "message": steps[1]["error"]}
+
+            for line in mtp_output.split('\n'):
+                if serial in line:
+                    parts = line.split(',')
+                    if len(parts) > 0:
+                        mtp_index = parts[0].strip()
+                        break
+
+            if mtp_index is None:
+                steps[2]["status"] = "failed"
+                steps[2]["error"] = f"Device {serial} not found in MTP devices list. Please scan MTP map first."
+                return {"success": False, "steps": steps, "message": steps[2]["error"]}
+            steps[2]["status"] = "completed"
 
         # Step 4: Create mount directory
         mount_path = f"/mnt/mtp/{serial}"
