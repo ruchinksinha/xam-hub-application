@@ -18,8 +18,6 @@ export default function WifiHotspotTab() {
   const [error, setError] = useState(null);
   const [showConfig, setShowConfig] = useState(false);
   const [wifiClients, setWifiClients] = useState([]);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const [diagnostics, setDiagnostics] = useState(null);
 
   const fetchHotspotStatus = async () => {
     try {
@@ -109,17 +107,6 @@ export default function WifiHotspotTab() {
     }
   };
 
-  const fetchDiagnostics = async () => {
-    try {
-      const response = await fetch(`${API_URL}/api/admin/diagnostics`);
-      const data = await response.json();
-      setDiagnostics(data);
-    } catch (error) {
-      console.error('Failed to fetch diagnostics:', error);
-      setError('Failed to fetch diagnostics');
-    }
-  };
-
   if (loading) {
     return (
       <div style={{ padding: '24px', textAlign: 'center', color: '#6b7280' }}>
@@ -135,20 +122,12 @@ export default function WifiHotspotTab() {
           <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#1f2937', margin: 0 }}>WiFi Hotspot Management</h2>
           <p style={{ color: '#6b7280', fontSize: '14px', marginTop: '4px' }}>Configure and monitor WiFi hotspot settings</p>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button onClick={() => {
-            setShowDiagnostics(!showDiagnostics);
-            if (!showDiagnostics) fetchDiagnostics();
-          }} className="refresh-btn" style={{ background: showDiagnostics ? '#3b82f6' : '' }}>
-            Diagnostics
-          </button>
-          <button onClick={fetchHotspotStatus} className="refresh-btn" title="Refresh status">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-            </svg>
-            Refresh
-          </button>
-        </div>
+        <button onClick={fetchHotspotStatus} className="refresh-btn" title="Refresh status">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+          </svg>
+          Refresh
+        </button>
       </div>
 
       {error && (
@@ -374,36 +353,6 @@ export default function WifiHotspotTab() {
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {showDiagnostics && diagnostics && (
-        <div className="admin-card diagnostics-card" style={{ marginTop: '24px' }}>
-          <div className="card-header">
-            <h2>WiFi Diagnostics</h2>
-          </div>
-          <div className="card-content">
-            <div style={{ fontSize: '13px', fontFamily: 'monospace', background: '#1f2937', color: '#f3f4f6', padding: '16px', borderRadius: '6px', overflow: 'auto', maxHeight: '400px' }}>
-              <div style={{ marginBottom: '16px' }}>
-                <strong style={{ color: '#60a5fa' }}>NetworkManager Status:</strong> {diagnostics.networkmanager_status}
-              </div>
-              <div style={{ marginBottom: '16px' }}>
-                <strong style={{ color: '#60a5fa' }}>AP Mode Supported:</strong> {diagnostics.ap_mode_supported ? 'Yes' : 'No'}
-              </div>
-              <div style={{ marginBottom: '16px' }}>
-                <strong style={{ color: '#60a5fa' }}>All Connections:</strong>
-                <pre style={{ whiteSpace: 'pre-wrap', marginTop: '8px' }}>{diagnostics.all_connections}</pre>
-              </div>
-              <div style={{ marginBottom: '16px' }}>
-                <strong style={{ color: '#60a5fa' }}>Interface Info:</strong>
-                <pre style={{ whiteSpace: 'pre-wrap', marginTop: '8px' }}>{diagnostics.interface_info}</pre>
-              </div>
-              <div>
-                <strong style={{ color: '#60a5fa' }}>Rfkill Status:</strong>
-                <pre style={{ whiteSpace: 'pre-wrap', marginTop: '8px' }}>{diagnostics.rfkill_status}</pre>
-              </div>
-            </div>
           </div>
         </div>
       )}

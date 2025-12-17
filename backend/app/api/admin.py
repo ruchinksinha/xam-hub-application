@@ -95,68 +95,51 @@ async def disconnect_wifi_client(ip_address: str):
         except:
             pass
 
-        # Get the MAC address from DHCP leases to block it temporarily
+        # Get the MAC address and interface from connected clients
         clients = hotspot_manager.get_connected_clients()
         client = next((c for c in clients if c['ip_address'] == ip_address), None)
 
-        if client:
-            mac_address = client['mac_address']
-
-            # Block the MAC address using iptables (this forces disconnect)
-            try:
-                subprocess.run(
-                    ['sudo', 'iptables', '-A', 'INPUT', '-m', 'mac', '--mac-source', mac_address, '-j', 'DROP'],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                subprocess.run(
-                    ['sudo', 'iptables', '-A', 'FORWARD', '-m', 'mac', '--mac-source', mac_address, '-j', 'DROP'],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-
-                # Remove from DHCP lease
-                subprocess.run(
-                    ['sudo', 'dhcp_release', mac_address, ip_address],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-
-                # Wait a moment then unblock (so they can reconnect if needed)
-                import time
-                time.sleep(2)
-
-                subprocess.run(
-                    ['sudo', 'iptables', '-D', 'INPUT', '-m', 'mac', '--mac-source', mac_address, '-j', 'DROP'],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                subprocess.run(
-                    ['sudo', 'iptables', '-D', 'FORWARD', '-m', 'mac', '--mac-source', mac_address, '-j', 'DROP'],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-
-            except Exception as e:
-                print(f"Error blocking MAC: {e}")
-
-            # Update registered device status
-            all_registered = json_storage.get_all_devices()
-            for device in all_registered:
-                if device.get('wifi_ip') == ip_address or device.get('wifi_mac') == mac_address:
-                    json_storage.update_device(device['serial'], {
-                        'is_connected': False,
-                        'connection_type': 'disconnected'
-                    })
-
-            return {"success": True, "message": f"Disconnected device at {ip_address}"}
-        else:
+        if not client:
             raise HTTPException(status_code=404, detail="Client not found")
+
+        mac_address = client['mac_address']
+
+        # Get the WiFi interface that has this client
+        status = hotspot_manager.get_status()
+        if not status['active'] or not status['aps']:
+            raise HTTPException(status_code=400, detail="No active hotspot")
+
+        interface = status['aps'][0]['interface']
+
+        # Use iw to deauthenticate the client
+        try:
+            result = subprocess.run(
+                ['iw', 'dev', interface, 'station', 'del', mac_address],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            if result.returncode != 0:
+                error_msg = result.stderr or result.stdout
+                print(f"iw station del failed: {error_msg}")
+                raise HTTPException(status_code=500, detail=f"Failed to disconnect client: {error_msg}")
+
+        except subprocess.TimeoutExpired:
+            raise HTTPException(status_code=500, detail="Command timed out")
+        except FileNotFoundError:
+            raise HTTPException(status_code=500, detail="iw command not found")
+
+        # Update registered device status
+        all_registered = json_storage.get_all_devices()
+        for device in all_registered:
+            if device.get('wifi_ip') == ip_address or device.get('wifi_mac') == mac_address:
+                json_storage.update_device(device['serial'], {
+                    'is_connected': False,
+                    'connection_type': 'disconnected'
+                })
+
+        return {"success": True, "message": f"Disconnected device at {ip_address}"}
 
     except HTTPException:
         raise
