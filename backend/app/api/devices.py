@@ -406,24 +406,24 @@ async def push_profile(serial: str):
     Push device profile to a device via MTP
     """
     steps = [
-        {"step": 1, "description": "Checking device_profile.json", "status": "pending", "error": None},
+        {"step": 1, "description": "Checking exam_metadata.json", "status": "pending", "error": None},
         {"step": 2, "description": "Listing MTP devices", "status": "pending", "error": None},
         {"step": 3, "description": "Identifying target MTP device", "status": "pending", "error": None},
         {"step": 4, "description": "Creating mount directory", "status": "pending", "error": None},
         {"step": 5, "description": "Mounting MTP device", "status": "pending", "error": None},
         {"step": 6, "description": "Creating Internal storage/XAM directory", "status": "pending", "error": None},
-        {"step": 7, "description": "Copying device_profile.json", "status": "pending", "error": None},
+        {"step": 7, "description": "Copying exam_metadata.json", "status": "pending", "error": None},
         {"step": 8, "description": "Unmounting device", "status": "pending", "error": None},
     ]
 
     mount_path = None
 
     try:
-        # Step 1: Check if device_profile.json exists
-        profile_path = Path("device_profile.json")
+        # Step 1: Check if exam_metadata.json exists
+        profile_path = Path("exam_metadata.json")
         if not profile_path.exists():
             steps[0]["status"] = "failed"
-            steps[0]["error"] = "device_profile.json not found. Please publish a profile first from Admin Centre."
+            steps[0]["error"] = "exam_metadata.json not found. Please publish a profile first from Admin Centre."
             return {"success": False, "steps": steps, "message": steps[0]["error"]}
         steps[0]["status"] = "completed"
 
@@ -509,14 +509,14 @@ async def push_profile(serial: str):
             subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
             return {"success": False, "steps": steps, "message": steps[5]["error"]}
 
-        # Step 7: Copy device_profile.json
+        # Step 7: Copy exam_metadata.json
         try:
-            dest_file = xam_dir / "device_profile.json"
+            dest_file = xam_dir / "exam_metadata.json"
             shutil.copy2(profile_path, dest_file)
             steps[6]["status"] = "completed"
         except Exception as e:
             steps[6]["status"] = "failed"
-            steps[6]["error"] = f"Failed to copy device_profile.json: {str(e)}"
+            steps[6]["error"] = f"Failed to copy exam_metadata.json: {str(e)}"
             # Unmount before returning
             subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
             return {"success": False, "steps": steps, "message": steps[6]["error"]}
