@@ -830,19 +830,27 @@ async def push_profile(serial: str):
                 print(f"DEBUG: mtp-detect output:\n{mtp_detect_result.stdout}")
 
                 # Extract device bus and device number from mtp-detect output
-                # Looking for lines like: Device 0 (VID=xxxx and PID=xxxx) is a ...
-                # or usb:001,XXX
-                device_id = None
+                # Looking for lines like: "@ bus 1, dev 14"
+                bus_num = None
+                dev_num = None
                 for line in mtp_detect_result.stdout.split('\n'):
-                    if 'usb:' in line:
-                        # Extract usb:bus,device format
-                        parts = line.split()
-                        for part in parts:
-                            if part.startswith('usb:'):
-                                device_id = part
-                                break
-                        if device_id:
+                    if '@ bus' in line and 'dev' in line:
+                        # Parse: "Samsung: Galaxy models (MTP) (04e8:6860) @ bus 1, dev 14"
+                        parts = line.split('@')[1].strip()  # Get "bus 1, dev 14"
+                        for part in parts.split(','):
+                            part = part.strip()
+                            if part.startswith('bus '):
+                                bus_num = int(part.split()[1])
+                            elif part.startswith('dev '):
+                                dev_num = int(part.split()[1])
+                        if bus_num is not None and dev_num is not None:
                             break
+
+                device_id = None
+                if bus_num is not None and dev_num is not None:
+                    # Construct device_id in format usb:001,014
+                    device_id = f"usb:{bus_num:03d},{dev_num:03d}"
+                    print(f"DEBUG: Constructed device_id: {device_id}")
 
                 if device_id:
                     # Construct MTP URI
