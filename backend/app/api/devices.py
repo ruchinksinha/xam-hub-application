@@ -800,14 +800,19 @@ async def push_profile(serial: str):
                 timeout=10
             )
 
+            print(f"DEBUG: gio mount -l output:\n{mount_list_result.stdout}")
+
             # Look for MTP mount in the output
-            # Format: Mount(N): mtp -> mtp://DEVICE_INFO/
+            # Format: Mount(N): mtp -> mtp://DEVICE_INFO/ or Mount(N): DEVICE -> mtp://DEVICE_INFO/
             mtp_uri = None
             for line in mount_list_result.stdout.split('\n'):
+                print(f"DEBUG: Checking line: {line}")
                 if 'mtp://' in line.lower() and '->' in line:
-                    uri_part = line.split('->')[1].strip() if '->' in line else line
-                    if 'mtp://' in uri_part:
+                    uri_part = line.split('->')[1].strip()
+                    print(f"DEBUG: Found uri_part: {uri_part}")
+                    if 'mtp://' in uri_part.lower():
                         mtp_uri = uri_part.split()[0]
+                        print(f"DEBUG: Extracted mtp_uri: {mtp_uri}")
                         break
 
             # If not found in mounts, try to find it in volumes and mount it
