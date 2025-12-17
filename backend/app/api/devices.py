@@ -369,13 +369,24 @@ async def scan_mtp_devices():
                 "product": dev.get('description')
             })
 
+        current_device_number = None
         for line in mtp_output.split('\n'):
             line = line.strip()
-            if not line or line.startswith('Available') or line.startswith('Use') or line.startswith('Device'):
+            if not line:
+                continue
+
+            if line.startswith('Device'):
+                import re
+                match = re.match(r'Device\s+(\d+)', line)
+                if match:
+                    current_device_number = match.group(1)
+                continue
+
+            if line.startswith('Available') or line.startswith('Use'):
                 continue
 
             parts = [p.strip() for p in line.split(',')]
-            if len(parts) >= 6:
+            if len(parts) >= 6 and current_device_number is not None:
                 bus_location = parts[0]
                 dev_num = parts[1]
                 product_id = parts[2]
@@ -402,17 +413,18 @@ async def scan_mtp_devices():
                     if usb_bus == mtp_bus and usb_device == mtp_device:
                         serial = usb_dev.get('serial')
                         if serial and serial != 'N/A':
-                            mtp_index = parts[0].strip()
                             device_info = f"{vendor} {product}"
 
                             mtp_map[serial] = {
-                                'mtp_index': mtp_index,
+                                'mtp_index': current_device_number,
                                 'device_info': device_info,
                                 'serial': serial,
                                 'bus': bus_location,
                                 'device': dev_num
                             }
                             break
+
+                current_device_number = None
 
         return {
             "success": True,
@@ -741,7 +753,7 @@ async def push_profile(serial: str):
         # Step 5: Mount MTP device
         try:
             result = subprocess.run(
-                ['jmtpfs', '-o', f'device={mtp_index}', mount_path],
+                ['jmtpfs', '-device', mtp_index, mount_path],
                 capture_output=True,
                 text=True,
                 timeout=30
