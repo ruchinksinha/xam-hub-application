@@ -5,10 +5,7 @@ const API_URL = 'http://localhost';
 export default function WifiHotspotTab() {
   const [hotspotStatus, setHotspotStatus] = useState({
     active: false,
-    ssid: '',
-    interface: '',
-    ip_address: '',
-    connected_devices: 0
+    aps: []
   });
   const [config, setConfig] = useState({
     ssid: '',
@@ -33,23 +30,7 @@ export default function WifiHotspotTab() {
       const statusData = await statusRes.json();
       const clientsData = await clientsRes.json();
 
-      // Transform new API structure to maintain backwards compatibility
-      // New structure: { active: bool, aps: [{interface, ssid, ip_address, connected_devices}] }
-      // Old structure: { active: bool, ssid, interface, ip_address, connected_devices }
-      if (statusData.aps && Array.isArray(statusData.aps)) {
-        const firstAp = statusData.aps[0] || {};
-        setHotspotStatus({
-          active: statusData.active,
-          ssid: firstAp.ssid || '',
-          interface: firstAp.interface || '',
-          ip_address: firstAp.ip_address || '',
-          connected_devices: firstAp.connected_devices || 0
-        });
-      } else {
-        // Fallback to old structure if aps array doesn't exist
-        setHotspotStatus(statusData);
-      }
-
+      setHotspotStatus(statusData);
       setWifiClients(clientsData.clients || []);
       setError(null);
     } catch (error) {
@@ -244,32 +225,49 @@ export default function WifiHotspotTab() {
           <div className="card-header">
             <h2>WiFi Hotspot</h2>
             <span className={`status-badge ${hotspotStatus.active ? 'active' : 'inactive'}`}>
-              {hotspotStatus.active ? 'Active' : 'Inactive'}
+              {hotspotStatus.active ? `Active (${hotspotStatus.aps?.length || 0})` : 'Inactive'}
             </span>
           </div>
 
           <div className="card-content">
-            {hotspotStatus.active ? (
-              <>
-                <div className="info-grid">
-                  <div className="info-item">
-                    <span className="label">SSID:</span>
-                    <span className="value">{hotspotStatus.ssid || 'N/A'}</span>
+            {hotspotStatus.active && hotspotStatus.aps && hotspotStatus.aps.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {hotspotStatus.aps.map((ap, index) => (
+                  <div key={index} style={{
+                    padding: '16px',
+                    backgroundColor: '#f9fafb',
+                    borderRadius: '8px',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    <h3 style={{
+                      margin: '0 0 12px 0',
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      color: '#111827'
+                    }}>
+                      Hotspot {index + 1}
+                    </h3>
+                    <div className="info-grid">
+                      <div className="info-item">
+                        <span className="label">SSID:</span>
+                        <span className="value">{ap.ssid || 'N/A'}</span>
+                      </div>
+                      <div className="info-item">
+                        <span className="label">Interface:</span>
+                        <span className="value">{ap.interface || 'N/A'}</span>
+                      </div>
+                      <div className="info-item">
+                        <span className="label">Gateway IP:</span>
+                        <span className="value">{ap.ip_address || 'N/A'}</span>
+                      </div>
+                      <div className="info-item">
+                        <span className="label">Connected Devices:</span>
+                        <span className="value">{ap.connected_devices || 0}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="info-item">
-                    <span className="label">Interface:</span>
-                    <span className="value">{hotspotStatus.interface || 'N/A'}</span>
-                  </div>
-                  <div className="info-item">
-                    <span className="label">IP Address:</span>
-                    <span className="value">{hotspotStatus.ip_address || 'N/A'}</span>
-                  </div>
-                  <div className="info-item">
-                    <span className="label">Connected Devices:</span>
-                    <span className="value">{hotspotStatus.connected_devices || 0}</span>
-                  </div>
-                </div>
-              </>
+                ))}
+              </div>
             ) : (
               <>
                 <p className="status-message">WiFi hotspot is currently inactive</p>
