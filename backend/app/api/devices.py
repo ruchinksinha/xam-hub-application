@@ -250,20 +250,85 @@ async def scan_mtp_devices():
 
     try:
         result = subprocess.run(
-            ['jmtpfs', '--listdevices'],
+            ['jmtpfs', '-l'],
             capture_output=True,
             text=True,
             timeout=10
         )
 
         if result.returncode != 0:
-            stderr_msg = result.stderr.strip() if result.stderr else "Unknown error"
+            stderr_msg = result.stderr.strip() if result.stderr else ""
             stdout_msg = result.stdout.strip() if result.stdout else ""
-            error_detail = f"jmtpfs failed: {stderr_msg or stdout_msg}"
-            raise HTTPException(
-                status_code=500,
-                detail=error_detail
-            )
+
+            try:
+                mtp_result = subprocess.run(
+                    ['mtp-detect'],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+
+                if mtp_result.returncode == 0:
+                    mtp_output = mtp_result.stdout
+                    usb_devices = await USBManager.get_connected_tablets()
+
+                    device_number = 0
+                    current_device_info = {}
+
+                    for line in mtp_output.split('\n'):
+                        line = line.strip()
+
+                        if line.startswith('Device ') and ':' in line:
+                            if current_device_info.get('serial'):
+                                for usb_dev in usb_devices:
+                                    serial = usb_dev.get('serial')
+                                    if serial and serial != 'N/A' and serial == current_device_info['serial']:
+                                        mtp_map[serial] = {
+                                            'mtp_index': str(current_device_info['device_num']),
+                                            'device_info': current_device_info.get('model', 'Unknown'),
+                                            'serial': serial
+                                        }
+                                        break
+
+                            current_device_info = {'device_num': device_number}
+                            device_number += 1
+
+                        elif 'Serial Number:' in line:
+                            serial = line.split(':', 1)[1].strip()
+                            current_device_info['serial'] = serial
+
+                        elif 'Friendly name:' in line or 'Model:' in line:
+                            model = line.split(':', 1)[1].strip()
+                            current_device_info['model'] = model
+
+                    if current_device_info.get('serial'):
+                        for usb_dev in usb_devices:
+                            serial = usb_dev.get('serial')
+                            if serial and serial != 'N/A' and serial == current_device_info['serial']:
+                                mtp_map[serial] = {
+                                    'mtp_index': str(current_device_info['device_num']),
+                                    'device_info': current_device_info.get('model', 'Unknown'),
+                                    'serial': serial
+                                }
+                                break
+
+                    return {
+                        "success": True,
+                        "message": f"MTP map created with {len(mtp_map)} devices",
+                        "map": mtp_map
+                    }
+                else:
+                    error_detail = f"Both jmtpfs and mtp-detect failed. jmtpfs: {stderr_msg or stdout_msg}, mtp-detect: {mtp_result.stderr}"
+                    raise HTTPException(
+                        status_code=500,
+                        detail=error_detail
+                    )
+            except FileNotFoundError:
+                error_detail = f"jmtpfs failed: {stderr_msg or stdout_msg}. mtp-detect not found. Install with: sudo apt-get install mtp-tools"
+                raise HTTPException(
+                    status_code=500,
+                    detail=error_detail
+                )
 
         mtp_output = result.stdout
         if not mtp_output or not mtp_output.strip():
@@ -309,7 +374,7 @@ async def scan_mtp_devices():
     except FileNotFoundError:
         raise HTTPException(
             status_code=500,
-            detail="jmtpfs not installed. Install with: sudo apt-get install jmtpfs"
+            detail="jmtpfs not installed. Install with: sudo apt-get install jmtpfs mtp-tools"
         )
     except HTTPException:
         raise
@@ -549,32 +614,58 @@ async def push_profile(serial: str):
         else:
             try:
                 result = subprocess.run(
-                    ['jmtpfs', '--listdevices'],
+                    ['jmtpfs', '-l'],
                     capture_output=True,
                     text=True,
                     timeout=10
                 )
                 steps[1]["status"] = "completed"
-                mtp_output = result.stdout
+
+                if result.returncode != 0:
+                    mtp_result = subprocess.run(
+                        ['mtp-detect'],
+                        capture_output=True,
+                        text=True,
+                        timeout=10
+                    )
+
+                    if mtp_result.returncode != 0:
+                        steps[1]["status"] = "failed"
+                        steps[1]["error"] = "Failed to detect MTP devices. Please ensure device is in MTP mode."
+                        return {"success": False, "steps": steps, "message": steps[1]["error"]}
+
+                    mtp_output = mtp_result.stdout
+                    device_number = 0
+
+                    for line in mtp_output.split('\n'):
+                        if 'Serial Number:' in line:
+                            device_serial = line.split(':', 1)[1].strip()
+                            if device_serial == serial:
+                                mtp_index = str(device_number)
+                                break
+                        elif line.startswith('Device ') and ':' in line:
+                            device_number += 1
+                else:
+                    mtp_output = result.stdout
+                    for line in mtp_output.split('\n'):
+                        if serial in line:
+                            parts = line.split(',')
+                            if len(parts) > 0:
+                                mtp_index = parts[0].strip()
+                                break
+
             except subprocess.TimeoutExpired:
                 steps[1]["status"] = "failed"
                 steps[1]["error"] = "Timeout while listing MTP devices"
                 return {"success": False, "steps": steps, "message": steps[1]["error"]}
             except FileNotFoundError:
                 steps[1]["status"] = "failed"
-                steps[1]["error"] = "jmtpfs not installed on system"
+                steps[1]["error"] = "MTP tools not installed. Install with: sudo apt-get install jmtpfs mtp-tools"
                 return {"success": False, "steps": steps, "message": steps[1]["error"]}
             except Exception as e:
                 steps[1]["status"] = "failed"
                 steps[1]["error"] = f"Error listing MTP devices: {str(e)}"
                 return {"success": False, "steps": steps, "message": steps[1]["error"]}
-
-            for line in mtp_output.split('\n'):
-                if serial in line:
-                    parts = line.split(',')
-                    if len(parts) > 0:
-                        mtp_index = parts[0].strip()
-                        break
 
             if mtp_index is None:
                 steps[2]["status"] = "failed"
