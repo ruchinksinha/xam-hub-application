@@ -663,14 +663,21 @@ async def publish_app(serial: str):
 @router.post("/{serial}/push-profile")
 async def push_profile(serial: str):
     """
-    Push device profile to a device via ADB
+    Push device profile to a device via MTP using jmtpfs and ADB
     """
     steps = [
         {"step": 1, "description": "Checking exam_metadata.json", "status": "pending", "error": None},
-        {"step": 2, "description": "Verifying device connection", "status": "pending", "error": None},
-        {"step": 3, "description": "Creating device directory on tablet", "status": "pending", "error": None},
-        {"step": 4, "description": "Pushing exam_metadata.json to device", "status": "pending", "error": None},
+        {"step": 2, "description": "Listing MTP devices", "status": "pending", "error": None},
+        {"step": 3, "description": "Identifying target MTP device", "status": "pending", "error": None},
+        {"step": 4, "description": "Creating mount directory", "status": "pending", "error": None},
+        {"step": 5, "description": "Mounting MTP device with jmtpfs", "status": "pending", "error": None},
+        {"step": 6, "description": "Creating Internal_Storage/Document/XAM directory via ADB", "status": "pending", "error": None},
+        {"step": 7, "description": "Copying exam_metadata.json via ADB", "status": "pending", "error": None},
+        {"step": 8, "description": "Unmounting device", "status": "pending", "error": None},
     ]
+
+    mount_path = None
+    project_root = Path(__file__).resolve().parent.parent.parent.parent
 
     try:
         # Step 1: Check if exam_metadata.json exists
@@ -681,23 +688,149 @@ async def push_profile(serial: str):
             return {"success": False, "steps": steps, "message": steps[0]["error"]}
         steps[0]["status"] = "completed"
 
-        # Step 2: Verify device is connected via ADB
-        try:
-            adb_devices = await ADBManager.get_connected_devices()
-            device_exists = any(d['id'] == serial for d in adb_devices)
+        # Step 2 & 3: Get MTP device index from map or scan
+        global mtp_map
+        mtp_index = None
 
-            if not device_exists:
+        if serial in mtp_map:
+            mtp_index = mtp_map[serial]['mtp_index']
+            steps[1]["status"] = "completed"
+            steps[2]["status"] = "completed"
+        else:
+            try:
+                result = subprocess.run(
+                    ['jmtpfs', '-l'],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                steps[1]["status"] = "completed"
+
+                if result.returncode != 0:
+                    mtp_result = subprocess.run(
+                        ['mtp-detect'],
+                        capture_output=True,
+                        text=True,
+                        timeout=10
+                    )
+
+                    if mtp_result.returncode != 0:
+                        steps[1]["status"] = "failed"
+                        steps[1]["error"] = "Failed to detect MTP devices. Please ensure device is in MTP mode."
+                        return {"success": False, "steps": steps, "message": steps[1]["error"]}
+
+                    mtp_output = mtp_result.stdout
+                    device_number = 0
+
+                    for line in mtp_output.split('\n'):
+                        if 'Serial Number:' in line:
+                            device_serial = line.split(':', 1)[1].strip()
+                            if device_serial == serial:
+                                mtp_index = str(device_number)
+                                break
+                        elif line.startswith('Device ') and ':' in line:
+                            device_number += 1
+                else:
+                    mtp_output = result.stdout
+                    for line in mtp_output.split('\n'):
+                        if serial in line:
+                            parts = line.split(',')
+                            if len(parts) > 0:
+                                mtp_index = parts[0].strip()
+                                break
+
+            except subprocess.TimeoutExpired:
                 steps[1]["status"] = "failed"
-                steps[1]["error"] = f"Device {serial} not found. Please ensure it's connected via ADB."
+                steps[1]["error"] = "Timeout while listing MTP devices"
+                return {"success": False, "steps": steps, "message": steps[1]["error"]}
+            except FileNotFoundError:
+                steps[1]["status"] = "failed"
+                steps[1]["error"] = "MTP tools not installed. Install with: sudo apt-get install jmtpfs mtp-tools"
+                return {"success": False, "steps": steps, "message": steps[1]["error"]}
+            except Exception as e:
+                steps[1]["status"] = "failed"
+                steps[1]["error"] = f"Error listing MTP devices: {str(e)}"
                 return {"success": False, "steps": steps, "message": steps[1]["error"]}
 
-            steps[1]["status"] = "completed"
-        except Exception as e:
-            steps[1]["status"] = "failed"
-            steps[1]["error"] = f"Failed to check ADB devices: {str(e)}"
-            return {"success": False, "steps": steps, "message": steps[1]["error"]}
+            if mtp_index is None:
+                steps[2]["status"] = "failed"
+                steps[2]["error"] = f"Device {serial} not found in MTP devices list. Please scan MTP map first."
+                return {"success": False, "steps": steps, "message": steps[2]["error"]}
+            steps[2]["status"] = "completed"
 
-        # Step 3: Create directory structure on device
+        # Step 4: Create Tablet directory structure
+        try:
+            tablet_dir = project_root / "Tablet" / serial
+            tablet_dir.mkdir(parents=True, exist_ok=True)
+            mount_path = str(tablet_dir)
+            print(f"DEBUG: Created mount directory: {mount_path}")
+            steps[3]["status"] = "completed"
+        except Exception as e:
+            steps[3]["status"] = "failed"
+            steps[3]["error"] = f"Failed to create mount directory: {str(e)}"
+            return {"success": False, "steps": steps, "message": steps[3]["error"]}
+
+        # Step 5: Mount MTP device using jmtpfs
+        try:
+            import time
+
+            # Check if already mounted
+            check_mount = subprocess.run(
+                ['mountpoint', '-q', mount_path],
+                capture_output=True
+            )
+
+            if check_mount.returncode == 0:
+                print(f"DEBUG: Directory already mounted, unmounting first...")
+                subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
+                time.sleep(1)
+
+            # Mount using jmtpfs
+            mount_cmd = ['jmtpfs']
+            if mtp_index and mtp_index != '0':
+                mount_cmd.extend(['-device', mtp_index])
+            mount_cmd.append(mount_path)
+
+            print(f"DEBUG: Mounting with command: {' '.join(mount_cmd)}")
+
+            mount_result = subprocess.run(
+                mount_cmd,
+                capture_output=True,
+                text=True,
+                timeout=15
+            )
+
+            if mount_result.returncode != 0:
+                steps[4]["status"] = "failed"
+                steps[4]["error"] = f"Failed to mount MTP device: {mount_result.stderr or mount_result.stdout}"
+                return {"success": False, "steps": steps, "message": steps[4]["error"]}
+
+            time.sleep(2)
+
+            # Verify mount succeeded
+            verify_mount = subprocess.run(
+                ['mountpoint', '-q', mount_path],
+                capture_output=True
+            )
+
+            if verify_mount.returncode != 0:
+                steps[4]["status"] = "failed"
+                steps[4]["error"] = "Device mount verification failed"
+                return {"success": False, "steps": steps, "message": steps[4]["error"]}
+
+            print(f"DEBUG: Device mounted successfully at {mount_path}")
+            steps[4]["status"] = "completed"
+
+        except subprocess.TimeoutExpired:
+            steps[4]["status"] = "failed"
+            steps[4]["error"] = "Timeout while mounting MTP device"
+            return {"success": False, "steps": steps, "message": steps[4]["error"]}
+        except Exception as e:
+            steps[4]["status"] = "failed"
+            steps[4]["error"] = f"Error mounting device: {str(e)}"
+            return {"success": False, "steps": steps, "message": steps[4]["error"]}
+
+        # Step 6: Create XAM directory using ADB (since MTP is read-only)
         device_path = "/sdcard/Document/XAM"
         try:
             mkdir_result = subprocess.run(
@@ -708,21 +841,24 @@ async def push_profile(serial: str):
             )
 
             if mkdir_result.returncode != 0:
-                steps[2]["status"] = "failed"
-                steps[2]["error"] = f"Failed to create directory on device: {mkdir_result.stderr}"
-                return {"success": False, "steps": steps, "message": steps[2]["error"]}
+                steps[5]["status"] = "failed"
+                steps[5]["error"] = f"Failed to create XAM directory via ADB: {mkdir_result.stderr}"
+                subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
+                return {"success": False, "steps": steps, "message": steps[5]["error"]}
 
-            steps[2]["status"] = "completed"
+            steps[5]["status"] = "completed"
         except subprocess.TimeoutExpired:
-            steps[2]["status"] = "failed"
-            steps[2]["error"] = "Timeout while creating directory on device"
-            return {"success": False, "steps": steps, "message": steps[2]["error"]}
+            steps[5]["status"] = "failed"
+            steps[5]["error"] = "Timeout while creating directory via ADB"
+            subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
+            return {"success": False, "steps": steps, "message": steps[5]["error"]}
         except Exception as e:
-            steps[2]["status"] = "failed"
-            steps[2]["error"] = f"Error creating directory: {str(e)}"
-            return {"success": False, "steps": steps, "message": steps[2]["error"]}
+            steps[5]["status"] = "failed"
+            steps[5]["error"] = f"Failed to create XAM directory: {str(e)}"
+            subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
+            return {"success": False, "steps": steps, "message": steps[5]["error"]}
 
-        # Step 4: Push exam_metadata.json to device
+        # Step 7: Copy exam_metadata.json using ADB
         try:
             dest_path = f"{device_path}/exam_metadata.json"
             push_result = subprocess.run(
@@ -733,19 +869,40 @@ async def push_profile(serial: str):
             )
 
             if push_result.returncode != 0:
-                steps[3]["status"] = "failed"
-                steps[3]["error"] = f"Failed to push file to device: {push_result.stderr}"
-                return {"success": False, "steps": steps, "message": steps[3]["error"]}
+                steps[6]["status"] = "failed"
+                steps[6]["error"] = f"Failed to copy exam_metadata.json via ADB: {push_result.stderr}"
+                subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
+                return {"success": False, "steps": steps, "message": steps[6]["error"]}
 
-            steps[3]["status"] = "completed"
+            steps[6]["status"] = "completed"
         except subprocess.TimeoutExpired:
-            steps[3]["status"] = "failed"
-            steps[3]["error"] = "Timeout while pushing file to device"
-            return {"success": False, "steps": steps, "message": steps[3]["error"]}
+            steps[6]["status"] = "failed"
+            steps[6]["error"] = "Timeout while copying file via ADB"
+            subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
+            return {"success": False, "steps": steps, "message": steps[6]["error"]}
         except Exception as e:
-            steps[3]["status"] = "failed"
-            steps[3]["error"] = f"Error pushing file: {str(e)}"
-            return {"success": False, "steps": steps, "message": steps[3]["error"]}
+            steps[6]["status"] = "failed"
+            steps[6]["error"] = f"Failed to copy exam_metadata.json: {str(e)}"
+            subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
+            return {"success": False, "steps": steps, "message": steps[6]["error"]}
+
+        # Step 8: Unmount device
+        try:
+            result = subprocess.run(
+                ['fusermount', '-u', mount_path],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode != 0:
+                steps[7]["status"] = "failed"
+                steps[7]["error"] = f"Failed to unmount device: {result.stderr or result.stdout}"
+                return {"success": False, "steps": steps, "message": steps[7]["error"]}
+            steps[7]["status"] = "completed"
+        except Exception as e:
+            steps[7]["status"] = "failed"
+            steps[7]["error"] = f"Error unmounting device: {str(e)}"
+            return {"success": False, "steps": steps, "message": steps[7]["error"]}
 
         return {
             "success": True,
@@ -756,6 +913,10 @@ async def push_profile(serial: str):
     except HTTPException:
         raise
     except Exception as e:
+        # Try to unmount if mount_path was created
+        if mount_path:
+            subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
+
         raise HTTPException(
             status_code=500,
             detail=f"Unexpected error: {str(e)}"
