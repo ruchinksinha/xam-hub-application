@@ -668,7 +668,9 @@ async def push_profile(serial: str):
     steps = [
         {"step": 1, "description": "Checking exam_metadata.json", "status": "pending", "error": None},
         {"step": 2, "description": "Detecting MTP device", "status": "pending", "error": None},
-        {"step": 3, "description": "Transferring exam_metadata.json via MTP", "status": "pending", "error": None},
+        {"step": 3, "description": "Listing device storage structure", "status": "pending", "error": None},
+        {"step": 4, "description": "Creating directory structure", "status": "pending", "error": None},
+        {"step": 5, "description": "Transferring exam_metadata.json via MTP", "status": "pending", "error": None},
     ]
 
     try:
@@ -678,6 +680,8 @@ async def push_profile(serial: str):
             steps[0]["status"] = "failed"
             steps[0]["error"] = "exam_metadata.json not found. Please publish a profile first from Admin Centre."
             return {"success": False, "steps": steps, "message": steps[0]["error"]}
+
+        print(f"DEBUG: Found exam_metadata.json at {profile_path.absolute()}")
         steps[0]["status"] = "completed"
 
         # Step 2: Detect MTP device
@@ -692,8 +696,10 @@ async def push_profile(serial: str):
             if result.returncode != 0:
                 steps[1]["status"] = "failed"
                 steps[1]["error"] = "Failed to detect MTP devices. Please ensure device is in MTP mode."
+                print(f"DEBUG: mtp-detect failed: {result.stderr}")
                 return {"success": False, "steps": steps, "message": steps[1]["error"]}
 
+            print(f"DEBUG: mtp-detect output:\n{result.stdout}")
             steps[1]["status"] = "completed"
         except subprocess.TimeoutExpired:
             steps[1]["status"] = "failed"
@@ -708,9 +714,57 @@ async def push_profile(serial: str):
             steps[1]["error"] = f"Error detecting MTP device: {str(e)}"
             return {"success": False, "steps": steps, "message": steps[1]["error"]}
 
-        # Step 3: Send file using mtp-sendfile
+        # Step 3: List device storage structure
+        try:
+            print("DEBUG: Listing device folders...")
+            folders_result = subprocess.run(
+                ['mtp-folders'],
+                capture_output=True,
+                text=True,
+                timeout=15
+            )
+            print(f"DEBUG: mtp-folders output:\n{folders_result.stdout}")
+            if folders_result.stderr:
+                print(f"DEBUG: mtp-folders stderr:\n{folders_result.stderr}")
+
+            steps[2]["status"] = "completed"
+        except Exception as e:
+            print(f"DEBUG: Error listing folders: {str(e)}")
+            steps[2]["status"] = "completed"
+
+        # Step 4: Create directory structure
+        try:
+            print("DEBUG: Attempting to create Document directory...")
+            mkdir_doc = subprocess.run(
+                ['mtp-newfolder', 'Document'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            print(f"DEBUG: mtp-newfolder Document return code: {mkdir_doc.returncode}")
+            print(f"DEBUG: mtp-newfolder Document stdout: {mkdir_doc.stdout}")
+            print(f"DEBUG: mtp-newfolder Document stderr: {mkdir_doc.stderr}")
+
+            print("DEBUG: Attempting to create XAM directory inside Document...")
+            mkdir_xam = subprocess.run(
+                ['mtp-newfolder', 'Document/XAM'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            print(f"DEBUG: mtp-newfolder Document/XAM return code: {mkdir_xam.returncode}")
+            print(f"DEBUG: mtp-newfolder Document/XAM stdout: {mkdir_xam.stdout}")
+            print(f"DEBUG: mtp-newfolder Document/XAM stderr: {mkdir_xam.stderr}")
+
+            steps[3]["status"] = "completed"
+        except Exception as e:
+            print(f"DEBUG: Error creating directories: {str(e)}")
+            steps[3]["status"] = "completed"
+
+        # Step 5: Send file using mtp-sendfile
         try:
             dest_path = "Document/XAM/exam_metadata.json"
+            print(f"DEBUG: Sending file {profile_path} to {dest_path}")
 
             send_result = subprocess.run(
                 ['mtp-sendfile', str(profile_path), dest_path],
@@ -719,20 +773,24 @@ async def push_profile(serial: str):
                 timeout=30
             )
 
-            if send_result.returncode != 0:
-                steps[2]["status"] = "failed"
-                steps[2]["error"] = f"Failed to send file via MTP: {send_result.stderr or send_result.stdout}"
-                return {"success": False, "steps": steps, "message": steps[2]["error"]}
+            print(f"DEBUG: mtp-sendfile return code: {send_result.returncode}")
+            print(f"DEBUG: mtp-sendfile stdout: {send_result.stdout}")
+            print(f"DEBUG: mtp-sendfile stderr: {send_result.stderr}")
 
-            steps[2]["status"] = "completed"
+            if send_result.returncode != 0:
+                steps[4]["status"] = "failed"
+                steps[4]["error"] = f"Failed to send file via MTP: {send_result.stderr or send_result.stdout}"
+                return {"success": False, "steps": steps, "message": steps[4]["error"]}
+
+            steps[4]["status"] = "completed"
         except subprocess.TimeoutExpired:
-            steps[2]["status"] = "failed"
-            steps[2]["error"] = "Timeout while sending file via MTP"
-            return {"success": False, "steps": steps, "message": steps[2]["error"]}
+            steps[4]["status"] = "failed"
+            steps[4]["error"] = "Timeout while sending file via MTP"
+            return {"success": False, "steps": steps, "message": steps[4]["error"]}
         except Exception as e:
-            steps[2]["status"] = "failed"
-            steps[2]["error"] = f"Failed to send file: {str(e)}"
-            return {"success": False, "steps": steps, "message": steps[2]["error"]}
+            steps[4]["status"] = "failed"
+            steps[4]["error"] = f"Failed to send file: {str(e)}"
+            return {"success": False, "steps": steps, "message": steps[4]["error"]}
 
         return {
             "success": True,
