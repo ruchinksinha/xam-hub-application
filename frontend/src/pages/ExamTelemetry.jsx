@@ -9,10 +9,16 @@ function ExamTelemetry() {
   const [deviceTelemetry, setDeviceTelemetry] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [viewMode, setViewMode] = useState('session')
+  const [allDevices, setAllDevices] = useState([])
+  const [filterDevice, setFilterDevice] = useState('')
+  const [deviceSessions, setDeviceSessions] = useState([])
+  const [filterSession, setFilterSession] = useState('')
 
   useEffect(() => {
     fetchStats()
     fetchSessions()
+    fetchAllDevices()
   }, [])
 
   const fetchStats = async () => {
@@ -33,6 +39,55 @@ function ExamTelemetry() {
       setSessions(data.sessions || [])
     } catch (err) {
       setError('Failed to load exam sessions')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchAllDevices = async () => {
+    try {
+      const response = await fetch('http://localhost/api/telemetry/devices')
+      const data = await response.json()
+      setAllDevices(data.devices || [])
+    } catch (err) {
+      console.error('Failed to load devices:', err)
+    }
+  }
+
+  const handleFilterDeviceChange = async (deviceId) => {
+    setFilterDevice(deviceId)
+    setFilterSession('')
+    setDeviceSessions([])
+    setDeviceTelemetry(null)
+
+    if (!deviceId) return
+
+    try {
+      const response = await fetch(`http://localhost/api/telemetry/device/${deviceId}/sessions`)
+      const data = await response.json()
+      setDeviceSessions(data.sessions || [])
+    } catch (err) {
+      console.error('Failed to load device sessions:', err)
+    }
+  }
+
+  const handleFilterSessionChange = async (sessionKey) => {
+    setFilterSession(sessionKey)
+    setDeviceTelemetry(null)
+
+    if (!sessionKey || !filterDevice) return
+
+    const [examId, sessionId] = sessionKey.split('/')
+
+    try {
+      setLoading(true)
+      const response = await fetch(
+        `http://localhost/api/telemetry/device/${examId}/${sessionId}/${filterDevice}`
+      )
+      const data = await response.json()
+      setDeviceTelemetry(data)
+    } catch (err) {
+      setError('Failed to load device telemetry')
     } finally {
       setLoading(false)
     }
@@ -114,7 +169,138 @@ function ExamTelemetry() {
         </div>
       )}
 
-      {(selectedSession || selectedDevice) && (
+      <div style={{
+        display: 'flex',
+        gap: '12px',
+        marginBottom: '24px',
+        alignItems: 'center',
+        background: 'white',
+        padding: '16px',
+        borderRadius: '8px',
+        border: '1px solid #e5e7eb'
+      }}>
+        <label style={{ fontWeight: '600', marginRight: '8px' }}>View Mode:</label>
+        <button
+          onClick={() => {
+            setViewMode('session')
+            setFilterDevice('')
+            setFilterSession('')
+            setDeviceTelemetry(null)
+          }}
+          style={{
+            padding: '8px 16px',
+            borderRadius: '6px',
+            border: viewMode === 'session' ? '2px solid #3b82f6' : '1px solid #d1d5db',
+            background: viewMode === 'session' ? '#eff6ff' : 'white',
+            color: viewMode === 'session' ? '#3b82f6' : '#6b7280',
+            fontWeight: viewMode === 'session' ? '600' : '400',
+            cursor: 'pointer'
+          }}
+        >
+          Session View
+        </button>
+        <button
+          onClick={() => {
+            setViewMode('filter')
+            setSelectedSession(null)
+            setSessionDetails(null)
+            setSelectedDevice(null)
+          }}
+          style={{
+            padding: '8px 16px',
+            borderRadius: '6px',
+            border: viewMode === 'filter' ? '2px solid #3b82f6' : '1px solid #d1d5db',
+            background: viewMode === 'filter' ? '#eff6ff' : 'white',
+            color: viewMode === 'filter' ? '#3b82f6' : '#6b7280',
+            fontWeight: viewMode === 'filter' ? '600' : '400',
+            cursor: 'pointer'
+          }}
+        >
+          Device Filter
+        </button>
+      </div>
+
+      {viewMode === 'filter' && (
+        <div style={{
+          background: 'white',
+          padding: '20px',
+          borderRadius: '8px',
+          border: '1px solid #e5e7eb',
+          marginBottom: '24px'
+        }}>
+          <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>
+            Filter by Device and Session
+          </h3>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '8px',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#374151'
+              }}>
+                Select Device
+              </label>
+              <select
+                value={filterDevice}
+                onChange={(e) => handleFilterDeviceChange(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #d1d5db',
+                  fontSize: '14px'
+                }}
+              >
+                <option value="">-- Select Device --</option>
+                {allDevices.map((device) => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.deviceId} ({device.sessionCount} sessions)
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '8px',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#374151'
+              }}>
+                Select Session
+              </label>
+              <select
+                value={filterSession}
+                onChange={(e) => handleFilterSessionChange(e.target.value)}
+                disabled={!filterDevice || deviceSessions.length === 0}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #d1d5db',
+                  fontSize: '14px',
+                  opacity: !filterDevice || deviceSessions.length === 0 ? 0.5 : 1,
+                  cursor: !filterDevice || deviceSessions.length === 0 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <option value="">-- Select Session --</option>
+                {deviceSessions.map((session) => (
+                  <option
+                    key={`${session.examId}/${session.sessionId}`}
+                    value={`${session.examId}/${session.sessionId}`}
+                  >
+                    Exam: {session.examId} | Session: {session.sessionId}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(selectedSession || selectedDevice) && viewMode === 'session' && (
         <button className="back-button" onClick={goBack}>
           ← Back
         </button>
@@ -126,7 +312,7 @@ function ExamTelemetry() {
         </div>
       )}
 
-      {!selectedSession && !selectedDevice && (
+      {viewMode === 'session' && !selectedSession && !selectedDevice && (
         <div className="sessions-list">
           <h2>Exam Sessions</h2>
           {loading ? (
@@ -155,7 +341,7 @@ function ExamTelemetry() {
         </div>
       )}
 
-      {selectedSession && !selectedDevice && sessionDetails && (
+      {viewMode === 'session' && selectedSession && !selectedDevice && sessionDetails && (
         <div className="session-details">
           <h2>Session Details</h2>
           <div className="detail-info">
@@ -201,7 +387,7 @@ function ExamTelemetry() {
         </div>
       )}
 
-      {selectedDevice && deviceTelemetry && (
+      {((viewMode === 'session' && selectedDevice) || (viewMode === 'filter' && filterDevice && filterSession)) && deviceTelemetry && (
         <div className="device-telemetry">
           <h2>Device Telemetry</h2>
           <div className="detail-info">

@@ -189,3 +189,108 @@ async def get_telemetry_stats():
         "totalDevices": len(devices),
         "dataTypes": data_types
     }
+
+@router.get("/devices")
+async def get_all_devices():
+    base_dir = get_exam_data_dir()
+
+    if not base_dir.exists():
+        return {"devices": []}
+
+    devices_map = {}
+    data_type_dirs = ["exam_sessions", "question_actions", "snapshot_actions", "final_submissions", "answer_sheets"]
+
+    for data_type in data_type_dirs:
+        type_dir = base_dir / data_type
+
+        if not type_dir.exists():
+            continue
+
+        for exam_id_dir in type_dir.iterdir():
+            if not exam_id_dir.is_dir():
+                continue
+
+            for session_id_dir in exam_id_dir.iterdir():
+                if not session_id_dir.is_dir():
+                    continue
+
+                for device_id_dir in session_id_dir.iterdir():
+                    if not device_id_dir.is_dir():
+                        continue
+
+                    device_id = device_id_dir.name
+
+                    if device_id not in devices_map:
+                        devices_map[device_id] = {
+                            "deviceId": device_id,
+                            "examIds": set(),
+                            "sessionIds": set()
+                        }
+
+                    devices_map[device_id]["examIds"].add(exam_id_dir.name)
+                    devices_map[device_id]["sessionIds"].add(f"{exam_id_dir.name}/{session_id_dir.name}")
+
+    devices = []
+    for device_id, data in devices_map.items():
+        devices.append({
+            "deviceId": device_id,
+            "examCount": len(data["examIds"]),
+            "sessionCount": len(data["sessionIds"])
+        })
+
+    devices.sort(key=lambda x: x["deviceId"])
+    return {"devices": devices}
+
+@router.get("/device/{device_id}/sessions")
+async def get_device_sessions(device_id: str):
+    base_dir = get_exam_data_dir()
+
+    if not base_dir.exists():
+        return {"sessions": []}
+
+    sessions = []
+    data_type_dirs = ["exam_sessions", "question_actions", "snapshot_actions", "final_submissions", "answer_sheets"]
+    session_map = {}
+
+    for data_type in data_type_dirs:
+        type_dir = base_dir / data_type
+
+        if not type_dir.exists():
+            continue
+
+        for exam_id_dir in type_dir.iterdir():
+            if not exam_id_dir.is_dir():
+                continue
+
+            exam_id = exam_id_dir.name
+
+            for session_id_dir in exam_id_dir.iterdir():
+                if not session_id_dir.is_dir():
+                    continue
+
+                session_id = session_id_dir.name
+
+                device_dir = session_id_dir / device_id
+                if device_dir.exists() and device_dir.is_dir():
+                    session_key = f"{exam_id}/{session_id}"
+
+                    if session_key not in session_map:
+                        session_map[session_key] = {
+                            "examId": exam_id,
+                            "sessionId": session_id,
+                            "dataTypes": set()
+                        }
+
+                    file_count = len(list(device_dir.glob("*.json")))
+                    if file_count > 0:
+                        session_map[session_key]["dataTypes"].add(data_type)
+
+    for session_key, data in session_map.items():
+        sessions.append({
+            "examId": data["examId"],
+            "sessionId": data["sessionId"],
+            "dataTypeCount": len(data["dataTypes"])
+        })
+
+    sessions.sort(key=lambda x: (x["examId"], x["sessionId"]))
+    return {"sessions": sessions}
