@@ -18,7 +18,6 @@ class HotspotConfig(BaseModel):
 
 class ExamMetadata(BaseModel):
     ssid: str
-    nodeapp_apk_path: str
 
 @router.get("/hotspot-status")
 async def get_hotspot_status():

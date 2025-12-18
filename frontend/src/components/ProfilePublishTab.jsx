@@ -4,8 +4,7 @@ const API_URL = 'http://localhost';
 
 export default function ProfilePublishTab() {
   const [formData, setFormData] = useState({
-    ssid: '',
-    nodeapp_apk_path: ''
+    ssid: ''
   });
   const [savedMetadata, setSavedMetadata] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -16,10 +15,12 @@ export default function ProfilePublishTab() {
   const [scanningMtp, setScanningMtp] = useState(false);
   const [mtpMessage, setMtpMessage] = useState('');
   const [mtpDebug, setMtpDebug] = useState(null);
+  const [availableSSIDs, setAvailableSSIDs] = useState([]);
 
   useEffect(() => {
     fetchMetadata();
     fetchMtpMap();
+    fetchAvailableSSIDs();
   }, []);
 
   const fetchMetadata = async () => {
@@ -30,8 +31,7 @@ export default function ProfilePublishTab() {
         setSavedMetadata(data);
         if (data.metadata) {
           setFormData({
-            ssid: data.metadata.ssid || '',
-            nodeapp_apk_path: data.metadata.nodeapp_apk_path || ''
+            ssid: data.metadata.ssid || ''
           });
         }
         setError(null);
@@ -45,6 +45,39 @@ export default function ProfilePublishTab() {
       setError('Failed to connect to server');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAvailableSSIDs = async () => {
+    try {
+      const [statusRes, configRes] = await Promise.all([
+        fetch(`${API_URL}/api/admin/hotspot-status`),
+        fetch(`${API_URL}/api/admin/hotspot-config`)
+      ]);
+
+      const ssids = [];
+
+      if (statusRes.ok) {
+        const statusData = await statusRes.json();
+        if (statusData.active && statusData.aps) {
+          statusData.aps.forEach(ap => {
+            if (ap.ssid && !ssids.includes(ap.ssid)) {
+              ssids.push(ap.ssid);
+            }
+          });
+        }
+      }
+
+      if (configRes.ok) {
+        const configData = await configRes.json();
+        if (configData.ssid && !ssids.includes(configData.ssid)) {
+          ssids.push(configData.ssid);
+        }
+      }
+
+      setAvailableSSIDs(ssids);
+    } catch (err) {
+      console.error('Failed to fetch available SSIDs:', err);
     }
   };
 
@@ -89,8 +122,8 @@ export default function ProfilePublishTab() {
   };
 
   const handleSave = async () => {
-    if (!formData.ssid.trim() || !formData.nodeapp_apk_path.trim()) {
-      setError('All fields are required');
+    if (!formData.ssid.trim()) {
+      setError('SSID is required');
       return;
     }
 
@@ -173,22 +206,22 @@ export default function ProfilePublishTab() {
                 <label>SSID:</label>
                 <input
                   type="text"
+                  list="ssid-list"
                   value={formData.ssid}
                   onChange={(e) => setFormData({ ...formData, ssid: e.target.value })}
                   className="form-input"
-                  placeholder="Enter WiFi SSID"
+                  placeholder="Select or enter WiFi SSID"
                 />
-              </div>
-
-              <div className="form-group">
-                <label>Node App APK Path:</label>
-                <input
-                  type="text"
-                  value={formData.nodeapp_apk_path}
-                  onChange={(e) => setFormData({ ...formData, nodeapp_apk_path: e.target.value })}
-                  className="form-input"
-                  placeholder="Enter APK path"
-                />
+                <datalist id="ssid-list">
+                  {availableSSIDs.map((ssid, index) => (
+                    <option key={index} value={ssid} />
+                  ))}
+                </datalist>
+                {availableSSIDs.length > 0 && (
+                  <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                    {availableSSIDs.length} available SSID{availableSSIDs.length !== 1 ? 's' : ''} from hotspot configuration
+                  </p>
+                )}
               </div>
 
               <div style={{ marginTop: '24px' }}>
