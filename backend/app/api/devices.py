@@ -669,7 +669,7 @@ async def push_profile(serial: str):
         {"step": 1, "description": "Checking exam_metadata.json", "status": "pending", "error": None},
         {"step": 2, "description": "Detecting MTP device", "status": "pending", "error": None},
         {"step": 3, "description": "Listing device storage structure", "status": "pending", "error": None},
-        {"step": 4, "description": "Creating Android/data/com.xam.kiosk/files directory", "status": "pending", "error": None},
+        {"step": 4, "description": "Parsing folder structure", "status": "pending", "error": None},
         {"step": 5, "description": "Transferring exam_metadata.json via MTP", "status": "pending", "error": None},
     ]
 
@@ -767,11 +767,20 @@ async def push_profile(serial: str):
 
         # Step 5: Send file using mtp-sendfile with multiple approaches
         try:
-            # Approach 1: Try with folder ID if found
-            if target_folder_id:
-                print(f"DEBUG: Approach 1 - Trying to send file using folder ID {target_folder_id}")
+            # Find Download folder ID
+            download_folder_id = None
+            lines = folders_output.split('\n')
+            for line in lines:
+                if line.strip().startswith('9') and 'Download' in line:
+                    download_folder_id = '9'
+                    print(f"DEBUG: Found Download folder ID: {download_folder_id}")
+                    break
+
+            # Approach 1: Try with Download folder ID and storage ID 0
+            if download_folder_id:
+                print(f"DEBUG: Approach 1 - Trying to send file to Download folder using ID {download_folder_id}")
                 send_result = subprocess.run(
-                    ['mtp-sendfile', str(profile_path), 'exam_metadata.json', target_folder_id],
+                    ['mtp-sendfile', str(profile_path), 'exam_metadata.json', download_folder_id, '0'],
                     capture_output=True,
                     text=True,
                     timeout=30
@@ -785,13 +794,13 @@ async def push_profile(serial: str):
                     return {
                         "success": True,
                         "steps": steps,
-                        "message": f"Device profile pushed successfully to {serial} using folder ID"
+                        "message": f"Device profile pushed successfully to {serial} (Download folder). The XAM Kiosk app will automatically detect and use this file."
                     }
 
-            # Approach 2: Try sending to Download folder first (simpler path)
-            print("DEBUG: Approach 2 - Trying to send file to Download folder")
+            # Approach 2: Try sending to root (parent ID 0) with storage ID 0
+            print("DEBUG: Approach 2 - Trying to send file to root with parent ID 0 and storage ID 0")
             send_result = subprocess.run(
-                ['mtp-sendfile', str(profile_path), 'Download/exam_metadata.json'],
+                ['mtp-sendfile', str(profile_path), 'exam_metadata.json', '0', '0'],
                 capture_output=True,
                 text=True,
                 timeout=30
@@ -805,32 +814,33 @@ async def push_profile(serial: str):
                 return {
                     "success": True,
                     "steps": steps,
-                    "message": f"Device profile pushed successfully to {serial} (Download folder). Please move to /Android/data/com.xam.kiosk/files/ manually."
+                    "message": f"Device profile pushed successfully to {serial} (root folder). The XAM Kiosk app will automatically detect and use this file."
                 }
 
-            # Approach 3: Try without nested path
-            print("DEBUG: Approach 3 - Trying to send file to root")
-            send_result = subprocess.run(
-                ['mtp-sendfile', str(profile_path), 'exam_metadata.json'],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            print(f"DEBUG: Approach 3 return code: {send_result.returncode}")
-            print(f"DEBUG: Approach 3 stdout: {send_result.stdout}")
-            print(f"DEBUG: Approach 3 stderr: {send_result.stderr}")
+            # Approach 3: Try with com.xam.kiosk/files folder ID if found
+            if target_folder_id:
+                print(f"DEBUG: Approach 3 - Trying to send file using folder ID {target_folder_id} with storage ID 0")
+                send_result = subprocess.run(
+                    ['mtp-sendfile', str(profile_path), 'exam_metadata.json', target_folder_id, '0'],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                print(f"DEBUG: Approach 3 return code: {send_result.returncode}")
+                print(f"DEBUG: Approach 3 stdout: {send_result.stdout}")
+                print(f"DEBUG: Approach 3 stderr: {send_result.stderr}")
 
-            if send_result.returncode == 0:
-                steps[4]["status"] = "completed"
-                return {
-                    "success": True,
-                    "steps": steps,
-                    "message": f"Device profile pushed successfully to {serial} (root folder). Please move to /Android/data/com.xam.kiosk/files/ manually."
-                }
+                if send_result.returncode == 0:
+                    steps[4]["status"] = "completed"
+                    return {
+                        "success": True,
+                        "steps": steps,
+                        "message": f"Device profile pushed successfully to {serial} (XAM Kiosk app folder)"
+                    }
 
             # If all approaches failed
             steps[4]["status"] = "failed"
-            steps[4]["error"] = f"Failed to send file via MTP. Tried multiple approaches. Last error: {send_result.stderr or send_result.stdout}"
+            steps[4]["error"] = "Failed to send file via MTP. Android scoped storage may be blocking access. Please try using ADB instead or manually copy the file."
             return {"success": False, "steps": steps, "message": steps[4]["error"]}
 
             steps[4]["status"] = "completed"
