@@ -732,77 +732,106 @@ async def push_profile(serial: str):
             print(f"DEBUG: Error listing folders: {str(e)}")
             steps[2]["status"] = "completed"
 
-        # Step 4: Create directory structure
+        # Step 4: Parse folder structure to find com.xam.kiosk/files folder ID
         try:
-            print("DEBUG: Attempting to create Android directory...")
-            mkdir_android = subprocess.run(
-                ['mtp-newfolder', 'Android'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            print(f"DEBUG: mtp-newfolder Android return code: {mkdir_android.returncode}")
-            print(f"DEBUG: mtp-newfolder Android stdout: {mkdir_android.stdout}")
-            print(f"DEBUG: mtp-newfolder Android stderr: {mkdir_android.stderr}")
+            target_folder_id = None
+            folders_output = folders_result.stdout
 
-            print("DEBUG: Attempting to create Android/data directory...")
-            mkdir_data = subprocess.run(
-                ['mtp-newfolder', 'Android/data'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            print(f"DEBUG: mtp-newfolder Android/data return code: {mkdir_data.returncode}")
-            print(f"DEBUG: mtp-newfolder Android/data stdout: {mkdir_data.stdout}")
-            print(f"DEBUG: mtp-newfolder Android/data stderr: {mkdir_data.stderr}")
+            # Parse the folder structure to find the ID of files under com.xam.kiosk
+            print("DEBUG: Parsing folder structure to find com.xam.kiosk/files folder ID...")
+            lines = folders_output.split('\n')
+            in_xam_kiosk = False
+            for line in lines:
+                if 'com.xam.kiosk' in line:
+                    in_xam_kiosk = True
+                    print(f"DEBUG: Found com.xam.kiosk line: {line}")
+                elif in_xam_kiosk and 'files' in line:
+                    # Extract the folder ID from the line
+                    parts = line.split()
+                    if parts and parts[0].isdigit():
+                        target_folder_id = parts[0]
+                        print(f"DEBUG: Found files folder ID: {target_folder_id}")
+                        break
+                elif in_xam_kiosk and line and line[0].isdigit() and 'com.' in line:
+                    in_xam_kiosk = False
 
-            print("DEBUG: Attempting to create Android/data/com.xam.kiosk directory...")
-            mkdir_kiosk = subprocess.run(
-                ['mtp-newfolder', 'Android/data/com.xam.kiosk'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            print(f"DEBUG: mtp-newfolder Android/data/com.xam.kiosk return code: {mkdir_kiosk.returncode}")
-            print(f"DEBUG: mtp-newfolder Android/data/com.xam.kiosk stdout: {mkdir_kiosk.stdout}")
-            print(f"DEBUG: mtp-newfolder Android/data/com.xam.kiosk stderr: {mkdir_kiosk.stderr}")
-
-            print("DEBUG: Attempting to create Android/data/com.xam.kiosk/files directory...")
-            mkdir_files = subprocess.run(
-                ['mtp-newfolder', 'Android/data/com.xam.kiosk/files'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            print(f"DEBUG: mtp-newfolder Android/data/com.xam.kiosk/files return code: {mkdir_files.returncode}")
-            print(f"DEBUG: mtp-newfolder Android/data/com.xam.kiosk/files stdout: {mkdir_files.stdout}")
-            print(f"DEBUG: mtp-newfolder Android/data/com.xam.kiosk/files stderr: {mkdir_files.stderr}")
+            if target_folder_id:
+                print(f"DEBUG: Target folder ID for com.xam.kiosk/files is: {target_folder_id}")
+            else:
+                print("DEBUG: Could not find com.xam.kiosk/files folder ID")
 
             steps[3]["status"] = "completed"
         except Exception as e:
-            print(f"DEBUG: Error creating directories: {str(e)}")
+            print(f"DEBUG: Error parsing folder structure: {str(e)}")
             steps[3]["status"] = "completed"
 
-        # Step 5: Send file using mtp-sendfile
+        # Step 5: Send file using mtp-sendfile with multiple approaches
         try:
-            dest_path = "Android/data/com.xam.kiosk/files/exam_metadata.json"
-            print(f"DEBUG: Sending file {profile_path} to {dest_path}")
+            # Approach 1: Try with folder ID if found
+            if target_folder_id:
+                print(f"DEBUG: Approach 1 - Trying to send file using folder ID {target_folder_id}")
+                send_result = subprocess.run(
+                    ['mtp-sendfile', str(profile_path), 'exam_metadata.json', target_folder_id],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                print(f"DEBUG: Approach 1 return code: {send_result.returncode}")
+                print(f"DEBUG: Approach 1 stdout: {send_result.stdout}")
+                print(f"DEBUG: Approach 1 stderr: {send_result.stderr}")
 
+                if send_result.returncode == 0:
+                    steps[4]["status"] = "completed"
+                    return {
+                        "success": True,
+                        "steps": steps,
+                        "message": f"Device profile pushed successfully to {serial} using folder ID"
+                    }
+
+            # Approach 2: Try sending to Download folder first (simpler path)
+            print("DEBUG: Approach 2 - Trying to send file to Download folder")
             send_result = subprocess.run(
-                ['mtp-sendfile', str(profile_path), dest_path],
+                ['mtp-sendfile', str(profile_path), 'Download/exam_metadata.json'],
                 capture_output=True,
                 text=True,
                 timeout=30
             )
+            print(f"DEBUG: Approach 2 return code: {send_result.returncode}")
+            print(f"DEBUG: Approach 2 stdout: {send_result.stdout}")
+            print(f"DEBUG: Approach 2 stderr: {send_result.stderr}")
 
-            print(f"DEBUG: mtp-sendfile return code: {send_result.returncode}")
-            print(f"DEBUG: mtp-sendfile stdout: {send_result.stdout}")
-            print(f"DEBUG: mtp-sendfile stderr: {send_result.stderr}")
+            if send_result.returncode == 0:
+                steps[4]["status"] = "completed"
+                return {
+                    "success": True,
+                    "steps": steps,
+                    "message": f"Device profile pushed successfully to {serial} (Download folder). Please move to /Android/data/com.xam.kiosk/files/ manually."
+                }
 
-            if send_result.returncode != 0:
-                steps[4]["status"] = "failed"
-                steps[4]["error"] = f"Failed to send file via MTP: {send_result.stderr or send_result.stdout}"
-                return {"success": False, "steps": steps, "message": steps[4]["error"]}
+            # Approach 3: Try without nested path
+            print("DEBUG: Approach 3 - Trying to send file to root")
+            send_result = subprocess.run(
+                ['mtp-sendfile', str(profile_path), 'exam_metadata.json'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            print(f"DEBUG: Approach 3 return code: {send_result.returncode}")
+            print(f"DEBUG: Approach 3 stdout: {send_result.stdout}")
+            print(f"DEBUG: Approach 3 stderr: {send_result.stderr}")
+
+            if send_result.returncode == 0:
+                steps[4]["status"] = "completed"
+                return {
+                    "success": True,
+                    "steps": steps,
+                    "message": f"Device profile pushed successfully to {serial} (root folder). Please move to /Android/data/com.xam.kiosk/files/ manually."
+                }
+
+            # If all approaches failed
+            steps[4]["status"] = "failed"
+            steps[4]["error"] = f"Failed to send file via MTP. Tried multiple approaches. Last error: {send_result.stderr or send_result.stdout}"
+            return {"success": False, "steps": steps, "message": steps[4]["error"]}
 
             steps[4]["status"] = "completed"
         except subprocess.TimeoutExpired:
