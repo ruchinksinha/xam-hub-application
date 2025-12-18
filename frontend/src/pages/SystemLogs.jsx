@@ -271,6 +271,20 @@ export default function SystemLogs() {
                 }}>
                   {log.type}
                 </span>
+                {log.details?.device_id && log.details.device_id !== 'N/A' && (
+                  <span style={{
+                    background: '#3730a3',
+                    color: '#a5b4fc',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    minWidth: '120px',
+                    textAlign: 'center'
+                  }}>
+                    {log.details.device_id}
+                  </span>
+                )}
                 <span style={{ color: '#f3f4f6', flex: 1 }}>
                   {log.message}
                 </span>
