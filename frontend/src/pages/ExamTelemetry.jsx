@@ -170,41 +170,41 @@ function ExamTelemetry() {
       {stats && (
         <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '32px' }}>
           <div style={{
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)',
             padding: '24px',
             borderRadius: '12px',
             color: 'white',
-            boxShadow: '0 4px 6px rgba(102, 126, 234, 0.2)'
+            boxShadow: '0 4px 6px rgba(90, 103, 216, 0.25)'
           }}>
             <h3 style={{ fontSize: '14px', fontWeight: '500', marginBottom: '12px', opacity: 0.9 }}>Total Exams</h3>
             <div style={{ fontSize: '36px', fontWeight: '700' }}>{stats.totalExams}</div>
           </div>
           <div style={{
-            background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            background: 'linear-gradient(135deg, #d946a8 0%, #dc2626 100%)',
             padding: '24px',
             borderRadius: '12px',
             color: 'white',
-            boxShadow: '0 4px 6px rgba(240, 147, 251, 0.2)'
+            boxShadow: '0 4px 6px rgba(217, 70, 168, 0.25)'
           }}>
             <h3 style={{ fontSize: '14px', fontWeight: '500', marginBottom: '12px', opacity: 0.9 }}>Distinct Devices</h3>
             <div style={{ fontSize: '36px', fontWeight: '700' }}>{stats.totalDevices}</div>
           </div>
           <div style={{
-            background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+            background: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)',
             padding: '24px',
             borderRadius: '12px',
             color: 'white',
-            boxShadow: '0 4px 6px rgba(79, 172, 254, 0.2)'
+            boxShadow: '0 4px 6px rgba(14, 165, 233, 0.25)'
           }}>
             <h3 style={{ fontSize: '14px', fontWeight: '500', marginBottom: '12px', opacity: 0.9 }}>Total Sessions</h3>
             <div style={{ fontSize: '36px', fontWeight: '700' }}>{stats.totalSessions}</div>
           </div>
           <div style={{
-            background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
             padding: '24px',
             borderRadius: '12px',
             color: 'white',
-            boxShadow: '0 4px 6px rgba(67, 233, 123, 0.2)'
+            boxShadow: '0 4px 6px rgba(16, 185, 129, 0.25)'
           }}>
             <h3 style={{ fontSize: '14px', fontWeight: '500', marginBottom: '12px', opacity: 0.9 }}>Data Files</h3>
             <div style={{ fontSize: '36px', fontWeight: '700' }}>
@@ -635,7 +635,8 @@ function ExamTelemetry() {
                             )}
                           </div>
                           <pre className="data-content" style={{
-                            background: 'linear-gradient(135deg, #fafbfc 0%, #f9fafb 100%)',
+                            background: '#1e1e1e',
+                            color: '#d4d4d4',
                             padding: '16px',
                             borderRadius: '8px',
                             fontSize: '12px',
@@ -644,7 +645,7 @@ function ExamTelemetry() {
                             whiteSpace: 'pre-wrap',
                             wordWrap: 'break-word',
                             wordBreak: 'break-word',
-                            border: '1px solid #e5e7eb',
+                            border: '1px solid #333',
                             fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
                             lineHeight: '1.6'
                           }}>
