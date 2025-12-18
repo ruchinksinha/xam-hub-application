@@ -77,34 +77,6 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
     }
   }
 
-  const handlePublishApp = async (device) => {
-    if (!device.serial || device.serial === 'N/A') {
-      alert('Cannot publish app without a valid serial number.')
-      return
-    }
-
-    if (!confirm(`Publish app to ${device.description}?`)) {
-      return
-    }
-
-    try {
-      const response = await fetch(`${API_URL}/api/devices/${device.serial}/publish-app`, {
-        method: 'POST'
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        alert(`App published successfully to ${device.description}!`)
-      } else {
-        alert(data.detail || 'Failed to publish app')
-      }
-    } catch (error) {
-      console.error('Failed to publish app:', error)
-      alert('Error publishing app')
-    }
-  }
-
   const handlePushProfile = async (device) => {
     if (!device.serial || device.serial === 'N/A') {
       alert('Cannot push profile without a valid serial number.')
@@ -288,24 +260,14 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
               </button>
             )}
             {device.is_registered && device.serial && device.serial !== 'N/A' && device.connection_type === 'usb' && (
-              <>
-                <button
-                  className="publish-btn"
-                  onClick={() => handlePublishApp(device)}
-                  title="Publish app to this device"
-                  disabled={device.connection_type !== 'usb'}
-                >
-                  Publish App
-                </button>
-                <button
-                  className="push-profile-btn"
-                  onClick={() => handlePushProfile(device)}
-                  title="Push device profile to this device"
-                  disabled={device.connection_type !== 'usb'}
-                >
-                  Push Device Profile
-                </button>
-              </>
+              <button
+                className="push-profile-btn"
+                onClick={() => handlePushProfile(device)}
+                title="Push device profile to this device"
+                disabled={device.connection_type !== 'usb'}
+              >
+                Push Device Profile
+              </button>
             )}
             {device.connection_type === 'wifi' && (
               <p className="wifi-only-message">WiFi connected - USB required for operations</p>
