@@ -9,17 +9,27 @@ function ExamTelemetry() {
   const [deviceTelemetry, setDeviceTelemetry] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [viewMode, setViewMode] = useState('session')
+  const [viewMode, setViewMode] = useState('filter')
   const [allDevices, setAllDevices] = useState([])
   const [filterDevice, setFilterDevice] = useState('')
   const [deviceSessions, setDeviceSessions] = useState([])
   const [filterSession, setFilterSession] = useState('')
+  const [activeDataType, setActiveDataType] = useState('exam_sessions')
 
   useEffect(() => {
     fetchStats()
     fetchSessions()
     fetchAllDevices()
   }, [])
+
+  useEffect(() => {
+    if (deviceTelemetry && deviceTelemetry.data) {
+      const dataTypes = Object.keys(deviceTelemetry.data)
+      if (dataTypes.length > 0 && !dataTypes.includes(activeDataType)) {
+        setActiveDataType(dataTypes[0])
+      }
+    }
+  }, [deviceTelemetry])
 
   const fetchStats = async () => {
     try {
@@ -157,7 +167,7 @@ function ExamTelemetry() {
             <div className="stat-value">{stats.totalSessions}</div>
           </div>
           <div className="stat-card">
-            <h3>Total Devices</h3>
+            <h3>Distinct Devices</h3>
             <div className="stat-value">{stats.totalDevices}</div>
           </div>
           <div className="stat-card">
@@ -396,31 +406,102 @@ function ExamTelemetry() {
             <p><strong>Session ID:</strong> {deviceTelemetry.sessionId}</p>
           </div>
 
-          <div className="telemetry-sections">
-            {Object.entries(deviceTelemetry.data).map(([dataType, items]) => (
-              <div key={dataType} className="telemetry-section">
-                <h3>{dataType.replace(/_/g, ' ').toUpperCase()} ({items.length})</h3>
-                {items.length === 0 ? (
-                  <p className="empty-data">No data available</p>
-                ) : (
-                  <div className="data-list">
-                    {items.map((item, index) => (
-                      <div key={index} className="data-item">
-                        <div className="data-header">
-                          <span className="file-name">{item._filename}</span>
-                          {item.received_at && (
-                            <span className="timestamp">{new Date(item.received_at).toLocaleString()}</span>
-                          )}
+          <div style={{ marginTop: '24px' }}>
+            <div style={{
+              display: 'flex',
+              gap: '8px',
+              borderBottom: '2px solid #e5e7eb',
+              marginBottom: '20px',
+              flexWrap: 'wrap'
+            }}>
+              {Object.entries(deviceTelemetry.data).map(([dataType, items]) => (
+                <button
+                  key={dataType}
+                  onClick={() => setActiveDataType(dataType)}
+                  style={{
+                    padding: '12px 20px',
+                    border: 'none',
+                    background: activeDataType === dataType ? '#3b82f6' : 'transparent',
+                    color: activeDataType === dataType ? 'white' : '#6b7280',
+                    fontWeight: activeDataType === dataType ? '600' : '500',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    borderRadius: '6px 6px 0 0',
+                    borderBottom: activeDataType === dataType ? '3px solid #3b82f6' : '3px solid transparent',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {dataType.replace(/_/g, ' ').toUpperCase()} ({items.length})
+                </button>
+              ))}
+            </div>
+
+            <div className="telemetry-tab-content">
+              {deviceTelemetry.data[activeDataType] && (
+                <>
+                  {deviceTelemetry.data[activeDataType].length === 0 ? (
+                    <p className="empty-data" style={{
+                      textAlign: 'center',
+                      padding: '40px',
+                      color: '#9ca3af',
+                      fontSize: '16px'
+                    }}>
+                      No data available
+                    </p>
+                  ) : (
+                    <div className="data-list">
+                      {deviceTelemetry.data[activeDataType].map((item, index) => (
+                        <div key={index} className="data-item" style={{
+                          background: 'white',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          padding: '16px',
+                          marginBottom: '16px'
+                        }}>
+                          <div className="data-header" style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '12px',
+                            paddingBottom: '12px',
+                            borderBottom: '1px solid #e5e7eb'
+                          }}>
+                            <span className="file-name" style={{
+                              fontWeight: '600',
+                              color: '#1f2937',
+                              fontSize: '14px'
+                            }}>
+                              {item._filename}
+                            </span>
+                            {item.received_at && (
+                              <span className="timestamp" style={{
+                                color: '#6b7280',
+                                fontSize: '13px'
+                              }}>
+                                {new Date(item.received_at).toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+                          <pre className="data-content" style={{
+                            background: '#f9fafb',
+                            padding: '12px',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            overflow: 'auto',
+                            maxHeight: '500px',
+                            whiteSpace: 'pre-wrap',
+                            wordWrap: 'break-word',
+                            wordBreak: 'break-word'
+                          }}>
+                            {JSON.stringify(item, null, 2)}
+                          </pre>
                         </div>
-                        <pre className="data-content">
-                          {JSON.stringify(item, null, 2)}
-                        </pre>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
