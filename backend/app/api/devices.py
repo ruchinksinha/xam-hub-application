@@ -671,7 +671,7 @@ async def push_profile(serial: str):
         {"step": 3, "description": "Identifying target MTP device", "status": "pending", "error": None},
         {"step": 4, "description": "Creating mount directory", "status": "pending", "error": None},
         {"step": 5, "description": "Mounting MTP device with jmtpfs", "status": "pending", "error": None},
-        {"step": 6, "description": "Creating Internal storage/XAM directory", "status": "pending", "error": None},
+        {"step": 6, "description": "Creating Internal_Storage/Document/XAM directory", "status": "pending", "error": None},
         {"step": 7, "description": "Copying exam_metadata.json", "status": "pending", "error": None},
         {"step": 8, "description": "Unmounting device", "status": "pending", "error": None},
     ]
@@ -831,7 +831,7 @@ async def push_profile(serial: str):
             return {"success": False, "steps": steps, "message": steps[4]["error"]}
 
         # Step 6: Create XAM directory
-        xam_dir = Path(mount_path) / "Internal storage" / "XAM"
+        xam_dir = Path(mount_path) / "Internal_Storage" / "Document" / "XAM"
         try:
             xam_dir.mkdir(parents=True, exist_ok=True)
             steps[5]["status"] = "completed"
