@@ -624,35 +624,61 @@ async def push_profile(serial: str):
         print(f"DEBUG: Found exam_metadata.json at {profile_path.absolute()}")
         steps[0]["status"] = "completed"
 
-        # Step 2: Detect MTP device
-        try:
-            result = subprocess.run(
-                ['mtp-detect'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
+        # Step 2: Detect MTP device and get bus/device IDs
+        global mtp_map
+        device_bus = None
+        device_dev = None
 
-            if result.returncode != 0:
+        if serial in mtp_map:
+            device_bus = mtp_map[serial].get('bus')
+            device_dev = mtp_map[serial].get('device')
+            print(f"DEBUG: Found device in MTP map - Bus: {device_bus}, Device: {device_dev}")
+
+        if not device_bus or not device_dev:
+            try:
+                result = subprocess.run(
+                    ['mtp-detect'],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+
+                if result.returncode != 0:
+                    steps[1]["status"] = "failed"
+                    steps[1]["error"] = "Failed to detect MTP devices. Please ensure device is in MTP mode."
+                    print(f"DEBUG: mtp-detect failed: {result.stderr}")
+                    return {"success": False, "steps": steps, "message": steps[1]["error"]}
+
+                print(f"DEBUG: mtp-detect output:\n{result.stdout}")
+
+                usb_devices = await USBManager.get_connected_tablets()
+                for usb_dev in usb_devices:
+                    if usb_dev.get('serial') == serial:
+                        device_bus = usb_dev.get('bus')
+                        device_dev = usb_dev.get('device')
+                        print(f"DEBUG: Found device via USB scan - Bus: {device_bus}, Device: {device_dev}")
+                        break
+
+                if not device_bus or not device_dev:
+                    steps[1]["status"] = "failed"
+                    steps[1]["error"] = "Could not determine device bus/device IDs. Try scanning MTP devices first."
+                    return {"success": False, "steps": steps, "message": steps[1]["error"]}
+
+                steps[1]["status"] = "completed"
+            except subprocess.TimeoutExpired:
                 steps[1]["status"] = "failed"
-                steps[1]["error"] = "Failed to detect MTP devices. Please ensure device is in MTP mode."
-                print(f"DEBUG: mtp-detect failed: {result.stderr}")
+                steps[1]["error"] = "Timeout while detecting MTP devices"
                 return {"success": False, "steps": steps, "message": steps[1]["error"]}
-
-            print(f"DEBUG: mtp-detect output:\n{result.stdout}")
+            except FileNotFoundError:
+                steps[1]["status"] = "failed"
+                steps[1]["error"] = "MTP tools not installed. Install with: sudo apt-get install mtp-tools jmtpfs"
+                return {"success": False, "steps": steps, "message": steps[1]["error"]}
+            except Exception as e:
+                steps[1]["status"] = "failed"
+                steps[1]["error"] = f"Error detecting MTP device: {str(e)}"
+                return {"success": False, "steps": steps, "message": steps[1]["error"]}
+        else:
             steps[1]["status"] = "completed"
-        except subprocess.TimeoutExpired:
-            steps[1]["status"] = "failed"
-            steps[1]["error"] = "Timeout while detecting MTP devices"
-            return {"success": False, "steps": steps, "message": steps[1]["error"]}
-        except FileNotFoundError:
-            steps[1]["status"] = "failed"
-            steps[1]["error"] = "MTP tools not installed. Install with: sudo apt-get install mtp-tools jmtpfs"
-            return {"success": False, "steps": steps, "message": steps[1]["error"]}
-        except Exception as e:
-            steps[1]["status"] = "failed"
-            steps[1]["error"] = f"Error detecting MTP device: {str(e)}"
-            return {"success": False, "steps": steps, "message": steps[1]["error"]}
 
         # Step 3: Create mount point
         try:
@@ -664,11 +690,13 @@ async def push_profile(serial: str):
             steps[2]["error"] = f"Failed to create mount point: {str(e)}"
             return {"success": False, "steps": steps, "message": steps[2]["error"]}
 
-        # Step 4: Mount device using jmtpfs
+        # Step 4: Mount device using jmtpfs with specific bus and device IDs
         try:
-            print("DEBUG: Mounting device with jmtpfs...")
+            print(f"DEBUG: Mounting device with jmtpfs using bus={device_bus}, device={device_dev}...")
+            mount_cmd = ['jmtpfs', '-device=' + str(device_bus) + ',' + str(device_dev), str(mount_point)]
+            print(f"DEBUG: Mount command: {' '.join(mount_cmd)}")
             mount_result = subprocess.run(
-                ['jmtpfs', str(mount_point)],
+                mount_cmd,
                 capture_output=True,
                 text=True,
                 timeout=15
