@@ -663,15 +663,19 @@ async def publish_app(serial: str):
 @router.post("/{serial}/push-profile")
 async def push_profile(serial: str):
     """
-    Push device profile to a device via MTP using mtp-sendfile
+    Push device profile to a device via MTP using jmtpfs
     """
     steps = [
         {"step": 1, "description": "Checking exam_metadata.json", "status": "pending", "error": None},
         {"step": 2, "description": "Detecting MTP device", "status": "pending", "error": None},
-        {"step": 3, "description": "Listing device storage structure", "status": "pending", "error": None},
-        {"step": 4, "description": "Parsing folder structure", "status": "pending", "error": None},
-        {"step": 5, "description": "Transferring exam_metadata.json via MTP", "status": "pending", "error": None},
+        {"step": 3, "description": "Creating mount point", "status": "pending", "error": None},
+        {"step": 4, "description": "Mounting device", "status": "pending", "error": None},
+        {"step": 5, "description": "Copying exam_metadata.json", "status": "pending", "error": None},
+        {"step": 6, "description": "Unmounting device", "status": "pending", "error": None},
     ]
+
+    mount_point = Path("/tmp/mtp-mount")
+    mounted = False
 
     try:
         # Step 1: Check if exam_metadata.json exists
@@ -707,151 +711,116 @@ async def push_profile(serial: str):
             return {"success": False, "steps": steps, "message": steps[1]["error"]}
         except FileNotFoundError:
             steps[1]["status"] = "failed"
-            steps[1]["error"] = "MTP tools not installed. Install with: sudo apt-get install mtp-tools"
+            steps[1]["error"] = "MTP tools not installed. Install with: sudo apt-get install mtp-tools jmtpfs"
             return {"success": False, "steps": steps, "message": steps[1]["error"]}
         except Exception as e:
             steps[1]["status"] = "failed"
             steps[1]["error"] = f"Error detecting MTP device: {str(e)}"
             return {"success": False, "steps": steps, "message": steps[1]["error"]}
 
-        # Step 3: List device storage structure
+        # Step 3: Create mount point
         try:
-            print("DEBUG: Listing device folders...")
-            folders_result = subprocess.run(
-                ['mtp-folders'],
+            mount_point.mkdir(parents=True, exist_ok=True)
+            print(f"DEBUG: Created mount point at {mount_point}")
+            steps[2]["status"] = "completed"
+        except Exception as e:
+            steps[2]["status"] = "failed"
+            steps[2]["error"] = f"Failed to create mount point: {str(e)}"
+            return {"success": False, "steps": steps, "message": steps[2]["error"]}
+
+        # Step 4: Mount device using jmtpfs
+        try:
+            print("DEBUG: Mounting device with jmtpfs...")
+            mount_result = subprocess.run(
+                ['jmtpfs', str(mount_point)],
                 capture_output=True,
                 text=True,
                 timeout=15
             )
-            print(f"DEBUG: mtp-folders output:\n{folders_result.stdout}")
-            if folders_result.stderr:
-                print(f"DEBUG: mtp-folders stderr:\n{folders_result.stderr}")
 
-            steps[2]["status"] = "completed"
+            if mount_result.returncode != 0:
+                steps[3]["status"] = "failed"
+                steps[3]["error"] = f"Failed to mount device: {mount_result.stderr or mount_result.stdout}"
+                print(f"DEBUG: jmtpfs mount failed: {mount_result.stderr}")
+                return {"success": False, "steps": steps, "message": steps[3]["error"]}
+
+            mounted = True
+            print(f"DEBUG: Device mounted at {mount_point}")
+            steps[3]["status"] = "completed"
+        except subprocess.TimeoutExpired:
+            steps[3]["status"] = "failed"
+            steps[3]["error"] = "Timeout while mounting device"
+            return {"success": False, "steps": steps, "message": steps[3]["error"]}
+        except FileNotFoundError:
+            steps[3]["status"] = "failed"
+            steps[3]["error"] = "jmtpfs not installed. Install with: sudo apt-get install jmtpfs"
+            return {"success": False, "steps": steps, "message": steps[3]["error"]}
         except Exception as e:
-            print(f"DEBUG: Error listing folders: {str(e)}")
-            steps[2]["status"] = "completed"
+            steps[3]["status"] = "failed"
+            steps[3]["error"] = f"Error mounting device: {str(e)}"
+            return {"success": False, "steps": steps, "message": steps[3]["error"]}
 
-        # Step 4: Parse folder structure to find com.xam.kiosk/files folder ID
+        # Step 5: Copy file to device
         try:
-            target_folder_id = None
-            folders_output = folders_result.stdout
+            # Try multiple target locations
+            target_paths = [
+                mount_point / "Download" / "exam_metadata.json",
+                mount_point / "Android" / "data" / "com.xam.kiosk" / "files" / "exam_metadata.json",
+                mount_point / "exam_metadata.json"
+            ]
 
-            # Parse the folder structure to find the ID of files under com.xam.kiosk
-            print("DEBUG: Parsing folder structure to find com.xam.kiosk/files folder ID...")
-            lines = folders_output.split('\n')
-            in_xam_kiosk = False
-            for line in lines:
-                if 'com.xam.kiosk' in line:
-                    in_xam_kiosk = True
-                    print(f"DEBUG: Found com.xam.kiosk line: {line}")
-                elif in_xam_kiosk and 'files' in line:
-                    # Extract the folder ID from the line
-                    parts = line.split()
-                    if parts and parts[0].isdigit():
-                        target_folder_id = parts[0]
-                        print(f"DEBUG: Found files folder ID: {target_folder_id}")
+            copied = False
+            for target_path in target_paths:
+                try:
+                    print(f"DEBUG: Trying to copy to {target_path}")
+
+                    # Create parent directory if needed
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+                    # Copy the file
+                    shutil.copy2(profile_path, target_path)
+
+                    # Verify the file was copied
+                    if target_path.exists():
+                        copied = True
+                        print(f"DEBUG: Successfully copied to {target_path}")
+                        steps[4]["status"] = "completed"
                         break
-                elif in_xam_kiosk and line and line[0].isdigit() and 'com.' in line:
-                    in_xam_kiosk = False
+                except Exception as e:
+                    print(f"DEBUG: Failed to copy to {target_path}: {str(e)}")
+                    continue
 
-            if target_folder_id:
-                print(f"DEBUG: Target folder ID for com.xam.kiosk/files is: {target_folder_id}")
-            else:
-                print("DEBUG: Could not find com.xam.kiosk/files folder ID")
+            if not copied:
+                steps[4]["status"] = "failed"
+                steps[4]["error"] = "Failed to copy file to any target location on device"
+                return {"success": False, "steps": steps, "message": steps[4]["error"]}
 
-            steps[3]["status"] = "completed"
         except Exception as e:
-            print(f"DEBUG: Error parsing folder structure: {str(e)}")
-            steps[3]["status"] = "completed"
+            steps[4]["status"] = "failed"
+            steps[4]["error"] = f"Failed to copy file: {str(e)}"
+            return {"success": False, "steps": steps, "message": steps[4]["error"]}
 
-        # Step 5: Send file using mtp-sendfile with multiple approaches
+        # Step 6: Unmount device
         try:
-            # Find Download folder ID
-            download_folder_id = None
-            lines = folders_output.split('\n')
-            for line in lines:
-                if line.strip().startswith('9') and 'Download' in line:
-                    download_folder_id = '9'
-                    print(f"DEBUG: Found Download folder ID: {download_folder_id}")
-                    break
-
-            # Approach 1: Try with Download folder ID and storage ID 0
-            if download_folder_id:
-                print(f"DEBUG: Approach 1 - Trying to send file to Download folder using ID {download_folder_id}")
-                send_result = subprocess.run(
-                    ['mtp-sendfile', str(profile_path), 'exam_metadata.json', download_folder_id, '0'],
-                    capture_output=True,
-                    text=True,
-                    timeout=30
-                )
-                print(f"DEBUG: Approach 1 return code: {send_result.returncode}")
-                print(f"DEBUG: Approach 1 stdout: {send_result.stdout}")
-                print(f"DEBUG: Approach 1 stderr: {send_result.stderr}")
-
-                if send_result.returncode == 0:
-                    steps[4]["status"] = "completed"
-                    return {
-                        "success": True,
-                        "steps": steps,
-                        "message": f"Device profile pushed successfully to {serial} (Download folder). The XAM Kiosk app will automatically detect and use this file."
-                    }
-
-            # Approach 2: Try sending to root (parent ID 0) with storage ID 0
-            print("DEBUG: Approach 2 - Trying to send file to root with parent ID 0 and storage ID 0")
-            send_result = subprocess.run(
-                ['mtp-sendfile', str(profile_path), 'exam_metadata.json', '0', '0'],
+            print("DEBUG: Unmounting device...")
+            unmount_result = subprocess.run(
+                ['fusermount', '-u', str(mount_point)],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=10
             )
-            print(f"DEBUG: Approach 2 return code: {send_result.returncode}")
-            print(f"DEBUG: Approach 2 stdout: {send_result.stdout}")
-            print(f"DEBUG: Approach 2 stderr: {send_result.stderr}")
 
-            if send_result.returncode == 0:
-                steps[4]["status"] = "completed"
-                return {
-                    "success": True,
-                    "steps": steps,
-                    "message": f"Device profile pushed successfully to {serial} (root folder). The XAM Kiosk app will automatically detect and use this file."
-                }
+            mounted = False
 
-            # Approach 3: Try with com.xam.kiosk/files folder ID if found
-            if target_folder_id:
-                print(f"DEBUG: Approach 3 - Trying to send file using folder ID {target_folder_id} with storage ID 0")
-                send_result = subprocess.run(
-                    ['mtp-sendfile', str(profile_path), 'exam_metadata.json', target_folder_id, '0'],
-                    capture_output=True,
-                    text=True,
-                    timeout=30
-                )
-                print(f"DEBUG: Approach 3 return code: {send_result.returncode}")
-                print(f"DEBUG: Approach 3 stdout: {send_result.stdout}")
-                print(f"DEBUG: Approach 3 stderr: {send_result.stderr}")
+            if unmount_result.returncode != 0:
+                print(f"DEBUG: Warning - unmount returned non-zero: {unmount_result.stderr}")
+            else:
+                print("DEBUG: Device unmounted successfully")
 
-                if send_result.returncode == 0:
-                    steps[4]["status"] = "completed"
-                    return {
-                        "success": True,
-                        "steps": steps,
-                        "message": f"Device profile pushed successfully to {serial} (XAM Kiosk app folder)"
-                    }
-
-            # If all approaches failed
-            steps[4]["status"] = "failed"
-            steps[4]["error"] = "Failed to send file via MTP. Android scoped storage may be blocking access. Please try using ADB instead or manually copy the file."
-            return {"success": False, "steps": steps, "message": steps[4]["error"]}
-
-            steps[4]["status"] = "completed"
-        except subprocess.TimeoutExpired:
-            steps[4]["status"] = "failed"
-            steps[4]["error"] = "Timeout while sending file via MTP"
-            return {"success": False, "steps": steps, "message": steps[4]["error"]}
+            steps[5]["status"] = "completed"
         except Exception as e:
-            steps[4]["status"] = "failed"
-            steps[4]["error"] = f"Failed to send file: {str(e)}"
-            return {"success": False, "steps": steps, "message": steps[4]["error"]}
+            print(f"DEBUG: Error during unmount: {str(e)}")
+            steps[5]["status"] = "completed"
 
         return {
             "success": True,
@@ -866,6 +835,18 @@ async def push_profile(serial: str):
             status_code=500,
             detail=f"Unexpected error: {str(e)}"
         )
+    finally:
+        if mounted:
+            try:
+                print("DEBUG: Cleaning up - unmounting device...")
+                subprocess.run(
+                    ['fusermount', '-u', str(mount_point)],
+                    capture_output=True,
+                    timeout=10
+                )
+                print("DEBUG: Device unmounted in cleanup")
+            except Exception as e:
+                print(f"DEBUG: Error during cleanup unmount: {str(e)}")
 
 @router.post("/{serial}/enable-wifi-adb")
 async def enable_wifi_adb(serial: str):

@@ -30,6 +30,9 @@ sudo apt-get install -y wget
 echo "Installing unzip..."
 sudo apt-get install -y unzip
 
+echo "Installing MTP tools for device file transfer..."
+sudo apt-get install -y mtp-tools jmtpfs libmtp-dev
+
 echo "Setting up ADB udev rules for device permissions..."
 sudo tee /etc/udev/rules.d/51-android.rules > /dev/null <<EOF
 # Google Nexus devices
