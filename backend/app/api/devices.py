@@ -670,13 +670,14 @@ async def push_profile(serial: str):
         {"step": 2, "description": "Listing MTP devices", "status": "pending", "error": None},
         {"step": 3, "description": "Identifying target MTP device", "status": "pending", "error": None},
         {"step": 4, "description": "Creating mount directory", "status": "pending", "error": None},
-        {"step": 5, "description": "Mounting MTP device", "status": "pending", "error": None},
+        {"step": 5, "description": "Mounting MTP device with jmtpfs", "status": "pending", "error": None},
         {"step": 6, "description": "Creating Internal storage/XAM directory", "status": "pending", "error": None},
         {"step": 7, "description": "Copying exam_metadata.json", "status": "pending", "error": None},
         {"step": 8, "description": "Unmounting device", "status": "pending", "error": None},
     ]
 
     mount_path = None
+    project_root = Path(__file__).resolve().parent.parent.parent.parent
 
     try:
         # Step 1: Check if exam_metadata.json exists
@@ -757,207 +758,67 @@ async def push_profile(serial: str):
                 return {"success": False, "steps": steps, "message": steps[2]["error"]}
             steps[2]["status"] = "completed"
 
-        # Step 4: Get USB bus and device info
+        # Step 4: Create Tablet directory structure
         try:
-            usb_result = subprocess.run(
-                ['lsusb'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-
-            bus_num = None
-            dev_num = None
-
-            for line in usb_result.stdout.split('\n'):
-                if 'Bus' in line:
-                    adb_check = subprocess.run(
-                        ['adb', '-s', serial, 'shell', 'echo test'],
-                        capture_output=True,
-                        text=True,
-                        timeout=5
-                    )
-                    if adb_check.returncode == 0:
-                        parts = line.split()
-                        if len(parts) >= 4:
-                            bus_num = parts[1].lstrip('0') or '0'
-                            dev_num = parts[3].rstrip(':').lstrip('0') or '0'
-                            break
-
-            if not bus_num or not dev_num:
-                for line in usb_result.stdout.split('\n'):
-                    if 'android' in line.lower() or 'samsung' in line.lower() or 'google' in line.lower():
-                        parts = line.split()
-                        if len(parts) >= 4:
-                            bus_num = parts[1].lstrip('0') or '0'
-                            dev_num = parts[3].rstrip(':').lstrip('0') or '0'
-                            break
-
-            if not bus_num or not dev_num:
-                steps[3]["status"] = "failed"
-                steps[3]["error"] = "Could not find USB device info"
-                return {"success": False, "steps": steps, "message": steps[3]["error"]}
-
+            tablet_dir = project_root / "Tablet" / serial
+            tablet_dir.mkdir(parents=True, exist_ok=True)
+            mount_path = str(tablet_dir)
+            print(f"DEBUG: Created mount directory: {mount_path}")
             steps[3]["status"] = "completed"
         except Exception as e:
             steps[3]["status"] = "failed"
-            steps[3]["error"] = f"Error getting USB info: {str(e)}"
+            steps[3]["error"] = f"Failed to create mount directory: {str(e)}"
             return {"success": False, "steps": steps, "message": steps[3]["error"]}
 
-        # Step 5: Find or mount MTP device
-        mount_path = None
+        # Step 5: Mount MTP device using jmtpfs
         try:
             import time
 
-            # First, check if device is already mounted
-            mount_list_result = subprocess.run(
-                ['gio', 'mount', '-l'],
-                capture_output=True,
-                text=True,
-                timeout=10
+            # Check if already mounted
+            check_mount = subprocess.run(
+                ['mountpoint', '-q', mount_path],
+                capture_output=True
             )
 
-            print(f"DEBUG: gio mount -l output:\n{mount_list_result.stdout}")
+            if check_mount.returncode == 0:
+                print(f"DEBUG: Directory already mounted, unmounting first...")
+                subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
+                time.sleep(1)
 
-            # Look for MTP mount in the output
-            # Format: Mount(N): mtp -> mtp://DEVICE_INFO/ or Mount(N): DEVICE -> mtp://DEVICE_INFO/
-            mtp_uri = None
-            for line in mount_list_result.stdout.split('\n'):
-                print(f"DEBUG: Checking line: {line}")
-                if 'mtp://' in line.lower() and '->' in line:
-                    uri_part = line.split('->')[1].strip()
-                    print(f"DEBUG: Found uri_part: {uri_part}")
-                    if 'mtp://' in uri_part.lower():
-                        mtp_uri = uri_part.split()[0]
-                        print(f"DEBUG: Extracted mtp_uri: {mtp_uri}")
-                        break
+            # Mount using jmtpfs
+            mount_cmd = ['jmtpfs']
+            if mtp_index and mtp_index != '0':
+                mount_cmd.extend(['-device', mtp_index])
+            mount_cmd.append(mount_path)
 
-            # If not found in mounts, try to mount the device
-            if not mtp_uri:
-                print("DEBUG: MTP not mounted, attempting to mount...")
+            print(f"DEBUG: Mounting with command: {' '.join(mount_cmd)}")
 
-                # Use mtp-detect to find device and construct URI
-                mtp_detect_result = subprocess.run(
-                    ['mtp-detect'],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-
-                print(f"DEBUG: mtp-detect output:\n{mtp_detect_result.stdout}")
-
-                # Extract device bus and device number from mtp-detect output
-                # Looking for lines like: "@ bus 1, dev 14"
-                bus_num = None
-                dev_num = None
-                for line in mtp_detect_result.stdout.split('\n'):
-                    if '@ bus' in line and 'dev' in line:
-                        # Parse: "Samsung: Galaxy models (MTP) (04e8:6860) @ bus 1, dev 14"
-                        parts = line.split('@')[1].strip()  # Get "bus 1, dev 14"
-                        for part in parts.split(','):
-                            part = part.strip()
-                            if part.startswith('bus '):
-                                bus_num = int(part.split()[1])
-                            elif part.startswith('dev '):
-                                dev_num = int(part.split()[1])
-                        if bus_num is not None and dev_num is not None:
-                            break
-
-                device_id = None
-                if bus_num is not None and dev_num is not None:
-                    # Construct device_id in format usb:001,014
-                    device_id = f"usb:{bus_num:03d},{dev_num:03d}"
-                    print(f"DEBUG: Constructed device_id: {device_id}")
-
-                if device_id:
-                    # First, try to get list of mountable volumes with more info
-                    volumes_result = subprocess.run(
-                        ['gio', 'mount', '-li'],
-                        capture_output=True,
-                        text=True,
-                        timeout=10
-                    )
-
-                    print(f"DEBUG: Available volumes:\n{volumes_result.stdout}")
-
-                    # Look for our device in the volumes list
-                    mount_command = None
-                    lines = volumes_result.stdout.split('\n')
-                    device_found = False
-                    for i, line in enumerate(lines):
-                        if device_id in line or 'Samsung' in line:
-                            device_found = True
-                            # Look for mount command in following lines
-                            for j in range(i, min(i+10, len(lines))):
-                                if 'can_mount' in lines[j].lower():
-                                    # Extract mount command
-                                    for k in range(j, min(j+5, len(lines))):
-                                        if 'mtp://' in lines[k]:
-                                            mount_command = lines[k].strip()
-                                            break
-                                if mount_command:
-                                    break
-                        if mount_command:
-                            break
-
-                    if mount_command:
-                        print(f"DEBUG: Found mount command: {mount_command}")
-                        # Try to mount it
-                        mount_result = subprocess.run(
-                            ['gio', 'mount', mount_command],
-                            capture_output=True,
-                            text=True,
-                            timeout=15
-                        )
-                        print(f"DEBUG: Mount result: {mount_result.stdout}, stderr: {mount_result.stderr}")
-                    else:
-                        # Fallback: Try gvfs-mtp to trigger auto-mount
-                        print("DEBUG: Trying alternative mount with gvfs-mtp")
-                        mount_result = subprocess.run(
-                            ['gvfs-mount', f'mtp://[{device_id}]/'],
-                            capture_output=True,
-                            text=True,
-                            timeout=15
-                        )
-                        print(f"DEBUG: gvfs-mount result: {mount_result.stdout}, stderr: {mount_result.stderr}")
-
-                    time.sleep(2)
-
-                    # Verify mount succeeded
-                    mount_list_result = subprocess.run(
-                        ['gio', 'mount', '-l'],
-                        capture_output=True,
-                        text=True,
-                        timeout=10
-                    )
-
-                    print(f"DEBUG: After mount, gio mount -l output:\n{mount_list_result.stdout}")
-
-            if not mtp_uri:
-                steps[4]["status"] = "failed"
-                steps[4]["error"] = "MTP device not mounted and auto-mount failed. Please ensure device is unlocked and USB debugging is enabled."
-                return {"success": False, "steps": steps, "message": steps[4]["error"]}
-
-            # Now find the GVFS mount path
-            time.sleep(1)
-
-            gvfs_result = subprocess.run(
-                ['find', '/run/user/1000/gvfs', '-type', 'd', '-maxdepth', '1'],
+            mount_result = subprocess.run(
+                mount_cmd,
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=15
             )
 
-            for path in gvfs_result.stdout.strip().split('\n'):
-                if 'mtp' in path.lower():
-                    mount_path = path.strip()
-                    break
-
-            if not mount_path:
+            if mount_result.returncode != 0:
                 steps[4]["status"] = "failed"
-                steps[4]["error"] = "Device mounted but GVFS mount point not found"
+                steps[4]["error"] = f"Failed to mount MTP device: {mount_result.stderr or mount_result.stdout}"
                 return {"success": False, "steps": steps, "message": steps[4]["error"]}
 
+            time.sleep(2)
+
+            # Verify mount succeeded
+            verify_mount = subprocess.run(
+                ['mountpoint', '-q', mount_path],
+                capture_output=True
+            )
+
+            if verify_mount.returncode != 0:
+                steps[4]["status"] = "failed"
+                steps[4]["error"] = "Device mount verification failed"
+                return {"success": False, "steps": steps, "message": steps[4]["error"]}
+
+            print(f"DEBUG: Device mounted successfully at {mount_path}")
             steps[4]["status"] = "completed"
 
         except subprocess.TimeoutExpired:
@@ -978,7 +839,7 @@ async def push_profile(serial: str):
             steps[5]["status"] = "failed"
             steps[5]["error"] = f"Failed to create XAM directory: {str(e)}"
             # Unmount before returning
-            subprocess.run(['gio', 'mount', '-u', mount_path], capture_output=True)
+            subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
             return {"success": False, "steps": steps, "message": steps[5]["error"]}
 
         # Step 7: Copy exam_metadata.json
@@ -990,13 +851,13 @@ async def push_profile(serial: str):
             steps[6]["status"] = "failed"
             steps[6]["error"] = f"Failed to copy exam_metadata.json: {str(e)}"
             # Unmount before returning
-            subprocess.run(['gio', 'mount', '-u', mount_path], capture_output=True)
+            subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
             return {"success": False, "steps": steps, "message": steps[6]["error"]}
 
         # Step 8: Unmount device
         try:
             result = subprocess.run(
-                ['gio', 'mount', '-u', mount_path],
+                ['fusermount', '-u', mount_path],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -1022,7 +883,7 @@ async def push_profile(serial: str):
     except Exception as e:
         # Try to unmount if mount_path was created
         if mount_path:
-            subprocess.run(['gio', 'mount', '-u', mount_path], capture_output=True)
+            subprocess.run(['fusermount', '-u', mount_path], capture_output=True)
 
         raise HTTPException(
             status_code=500,
