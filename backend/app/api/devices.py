@@ -669,7 +669,7 @@ async def push_profile(serial: str):
         {"step": 1, "description": "Checking exam_metadata.json", "status": "pending", "error": None},
         {"step": 2, "description": "Detecting MTP device", "status": "pending", "error": None},
         {"step": 3, "description": "Listing device storage structure", "status": "pending", "error": None},
-        {"step": 4, "description": "Creating directory structure", "status": "pending", "error": None},
+        {"step": 4, "description": "Creating Android/data/com.xam.kiosk/files directory", "status": "pending", "error": None},
         {"step": 5, "description": "Transferring exam_metadata.json via MTP", "status": "pending", "error": None},
     ]
 
@@ -734,27 +734,49 @@ async def push_profile(serial: str):
 
         # Step 4: Create directory structure
         try:
-            print("DEBUG: Attempting to create Document directory...")
-            mkdir_doc = subprocess.run(
-                ['mtp-newfolder', 'Document'],
+            print("DEBUG: Attempting to create Android directory...")
+            mkdir_android = subprocess.run(
+                ['mtp-newfolder', 'Android'],
                 capture_output=True,
                 text=True,
                 timeout=10
             )
-            print(f"DEBUG: mtp-newfolder Document return code: {mkdir_doc.returncode}")
-            print(f"DEBUG: mtp-newfolder Document stdout: {mkdir_doc.stdout}")
-            print(f"DEBUG: mtp-newfolder Document stderr: {mkdir_doc.stderr}")
+            print(f"DEBUG: mtp-newfolder Android return code: {mkdir_android.returncode}")
+            print(f"DEBUG: mtp-newfolder Android stdout: {mkdir_android.stdout}")
+            print(f"DEBUG: mtp-newfolder Android stderr: {mkdir_android.stderr}")
 
-            print("DEBUG: Attempting to create XAM directory inside Document...")
-            mkdir_xam = subprocess.run(
-                ['mtp-newfolder', 'Document/XAM'],
+            print("DEBUG: Attempting to create Android/data directory...")
+            mkdir_data = subprocess.run(
+                ['mtp-newfolder', 'Android/data'],
                 capture_output=True,
                 text=True,
                 timeout=10
             )
-            print(f"DEBUG: mtp-newfolder Document/XAM return code: {mkdir_xam.returncode}")
-            print(f"DEBUG: mtp-newfolder Document/XAM stdout: {mkdir_xam.stdout}")
-            print(f"DEBUG: mtp-newfolder Document/XAM stderr: {mkdir_xam.stderr}")
+            print(f"DEBUG: mtp-newfolder Android/data return code: {mkdir_data.returncode}")
+            print(f"DEBUG: mtp-newfolder Android/data stdout: {mkdir_data.stdout}")
+            print(f"DEBUG: mtp-newfolder Android/data stderr: {mkdir_data.stderr}")
+
+            print("DEBUG: Attempting to create Android/data/com.xam.kiosk directory...")
+            mkdir_kiosk = subprocess.run(
+                ['mtp-newfolder', 'Android/data/com.xam.kiosk'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            print(f"DEBUG: mtp-newfolder Android/data/com.xam.kiosk return code: {mkdir_kiosk.returncode}")
+            print(f"DEBUG: mtp-newfolder Android/data/com.xam.kiosk stdout: {mkdir_kiosk.stdout}")
+            print(f"DEBUG: mtp-newfolder Android/data/com.xam.kiosk stderr: {mkdir_kiosk.stderr}")
+
+            print("DEBUG: Attempting to create Android/data/com.xam.kiosk/files directory...")
+            mkdir_files = subprocess.run(
+                ['mtp-newfolder', 'Android/data/com.xam.kiosk/files'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            print(f"DEBUG: mtp-newfolder Android/data/com.xam.kiosk/files return code: {mkdir_files.returncode}")
+            print(f"DEBUG: mtp-newfolder Android/data/com.xam.kiosk/files stdout: {mkdir_files.stdout}")
+            print(f"DEBUG: mtp-newfolder Android/data/com.xam.kiosk/files stderr: {mkdir_files.stderr}")
 
             steps[3]["status"] = "completed"
         except Exception as e:
@@ -763,7 +785,7 @@ async def push_profile(serial: str):
 
         # Step 5: Send file using mtp-sendfile
         try:
-            dest_path = "Document/XAM/exam_metadata.json"
+            dest_path = "Android/data/com.xam.kiosk/files/exam_metadata.json"
             print(f"DEBUG: Sending file {profile_path} to {dest_path}")
 
             send_result = subprocess.run(
