@@ -36,7 +36,7 @@ class APILoggingMiddleware(BaseHTTPMiddleware):
             server_port = request.url.port or 8000
 
             body = await request.body()
-            device_id = self._extract_device_id_from_body(body)
+            device_id = await self._extract_device_id_from_body(body)
 
             async def receive():
                 return {"type": "http.request", "body": body}
