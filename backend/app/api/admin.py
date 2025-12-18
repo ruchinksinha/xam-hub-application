@@ -111,10 +111,10 @@ async def disconnect_wifi_client(ip_address: str):
 
         interface = status['aps'][0]['interface']
 
-        # Use iw to deauthenticate the client
+        # Use iw to deauthenticate the client (requires sudo)
         try:
             result = subprocess.run(
-                ['iw', 'dev', interface, 'station', 'del', mac_address],
+                ['sudo', 'iw', 'dev', interface, 'station', 'del', mac_address],
                 capture_output=True,
                 text=True,
                 timeout=5
@@ -123,7 +123,19 @@ async def disconnect_wifi_client(ip_address: str):
             if result.returncode != 0:
                 error_msg = result.stderr or result.stdout
                 print(f"iw station del failed: {error_msg}")
-                raise HTTPException(status_code=500, detail=f"Failed to disconnect client: {error_msg}")
+
+                # Fallback: Try using hostapd_cli if available
+                try:
+                    hostapd_result = subprocess.run(
+                        ['sudo', 'hostapd_cli', 'deauthenticate', mac_address],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if hostapd_result.returncode != 0:
+                        raise HTTPException(status_code=500, detail=f"Failed to disconnect client: {error_msg}")
+                except FileNotFoundError:
+                    raise HTTPException(status_code=500, detail=f"Failed to disconnect client: {error_msg}")
 
         except subprocess.TimeoutExpired:
             raise HTTPException(status_code=500, detail="Command timed out")
