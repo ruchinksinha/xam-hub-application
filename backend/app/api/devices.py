@@ -674,7 +674,7 @@ async def push_profile(serial: str):
         {"step": 6, "description": "Unmounting device", "status": "pending", "error": None},
     ]
 
-    mount_point = Path("/tmp/mtp-mount")
+    mount_point = Path(f"/tmp/{serial}")
     mounted = False
 
     try:
