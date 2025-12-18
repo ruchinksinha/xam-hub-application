@@ -151,28 +151,63 @@ function ExamTelemetry() {
 
   return (
     <div className="page-container">
-      <div className="page-header">
-        <h1>Exam Telemetry Dashboard</h1>
-        <p>Track exam sessions and device activity</p>
+      <div className="page-header" style={{
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        padding: '32px',
+        borderRadius: '12px',
+        marginBottom: '32px',
+        boxShadow: '0 8px 20px rgba(102, 126, 234, 0.25)',
+        color: 'white'
+      }}>
+        <h1 style={{ fontSize: '32px', fontWeight: '800', marginBottom: '8px', color: 'white' }}>
+          Exam Telemetry Dashboard
+        </h1>
+        <p style={{ fontSize: '16px', opacity: 0.95, color: 'white', fontWeight: '400' }}>
+          Track exam sessions and device activity
+        </p>
       </div>
 
       {stats && (
-        <div className="stats-grid">
-          <div className="stat-card">
-            <h3>Total Exams</h3>
-            <div className="stat-value">{stats.totalExams}</div>
+        <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '32px' }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            padding: '24px',
+            borderRadius: '12px',
+            color: 'white',
+            boxShadow: '0 4px 6px rgba(102, 126, 234, 0.2)'
+          }}>
+            <h3 style={{ fontSize: '14px', fontWeight: '500', marginBottom: '12px', opacity: 0.9 }}>Total Exams</h3>
+            <div style={{ fontSize: '36px', fontWeight: '700' }}>{stats.totalExams}</div>
           </div>
-          <div className="stat-card">
-            <h3>Total Sessions</h3>
-            <div className="stat-value">{stats.totalSessions}</div>
+          <div style={{
+            background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            padding: '24px',
+            borderRadius: '12px',
+            color: 'white',
+            boxShadow: '0 4px 6px rgba(240, 147, 251, 0.2)'
+          }}>
+            <h3 style={{ fontSize: '14px', fontWeight: '500', marginBottom: '12px', opacity: 0.9 }}>Distinct Devices</h3>
+            <div style={{ fontSize: '36px', fontWeight: '700' }}>{stats.totalDevices}</div>
           </div>
-          <div className="stat-card">
-            <h3>Distinct Devices</h3>
-            <div className="stat-value">{stats.totalDevices}</div>
+          <div style={{
+            background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+            padding: '24px',
+            borderRadius: '12px',
+            color: 'white',
+            boxShadow: '0 4px 6px rgba(79, 172, 254, 0.2)'
+          }}>
+            <h3 style={{ fontSize: '14px', fontWeight: '500', marginBottom: '12px', opacity: 0.9 }}>Total Sessions</h3>
+            <div style={{ fontSize: '36px', fontWeight: '700' }}>{stats.totalSessions}</div>
           </div>
-          <div className="stat-card">
-            <h3>Data Files</h3>
-            <div className="stat-value">
+          <div style={{
+            background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+            padding: '24px',
+            borderRadius: '12px',
+            color: 'white',
+            boxShadow: '0 4px 6px rgba(67, 233, 123, 0.2)'
+          }}>
+            <h3 style={{ fontSize: '14px', fontWeight: '500', marginBottom: '12px', opacity: 0.9 }}>Data Files</h3>
+            <div style={{ fontSize: '36px', fontWeight: '700' }}>
               {Object.values(stats.dataTypes).reduce((sum, val) => sum + val, 0)}
             </div>
           </div>
@@ -184,12 +219,12 @@ function ExamTelemetry() {
         gap: '12px',
         marginBottom: '24px',
         alignItems: 'center',
-        background: 'white',
-        padding: '16px',
-        borderRadius: '8px',
-        border: '1px solid #e5e7eb'
+        background: 'linear-gradient(135deg, #f6f8fb 0%, #ffffff 100%)',
+        padding: '20px',
+        borderRadius: '12px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
       }}>
-        <label style={{ fontWeight: '600', marginRight: '8px' }}>View Mode:</label>
+        <label style={{ fontWeight: '600', marginRight: '8px', color: '#1f2937', fontSize: '15px' }}>View Mode:</label>
         <button
           onClick={() => {
             setViewMode('session')
@@ -198,13 +233,16 @@ function ExamTelemetry() {
             setDeviceTelemetry(null)
           }}
           style={{
-            padding: '8px 16px',
-            borderRadius: '6px',
-            border: viewMode === 'session' ? '2px solid #3b82f6' : '1px solid #d1d5db',
-            background: viewMode === 'session' ? '#eff6ff' : 'white',
-            color: viewMode === 'session' ? '#3b82f6' : '#6b7280',
-            fontWeight: viewMode === 'session' ? '600' : '400',
-            cursor: 'pointer'
+            padding: '10px 20px',
+            borderRadius: '8px',
+            border: 'none',
+            background: viewMode === 'session' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'white',
+            color: viewMode === 'session' ? 'white' : '#6b7280',
+            fontWeight: '600',
+            cursor: 'pointer',
+            boxShadow: viewMode === 'session' ? '0 4px 12px rgba(102, 126, 234, 0.3)' : '0 2px 4px rgba(0,0,0,0.05)',
+            transition: 'all 0.3s ease',
+            fontSize: '14px'
           }}
         >
           Session View
@@ -217,13 +255,16 @@ function ExamTelemetry() {
             setSelectedDevice(null)
           }}
           style={{
-            padding: '8px 16px',
-            borderRadius: '6px',
-            border: viewMode === 'filter' ? '2px solid #3b82f6' : '1px solid #d1d5db',
-            background: viewMode === 'filter' ? '#eff6ff' : 'white',
-            color: viewMode === 'filter' ? '#3b82f6' : '#6b7280',
-            fontWeight: viewMode === 'filter' ? '600' : '400',
-            cursor: 'pointer'
+            padding: '10px 20px',
+            borderRadius: '8px',
+            border: 'none',
+            background: viewMode === 'filter' ? 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' : 'white',
+            color: viewMode === 'filter' ? 'white' : '#6b7280',
+            fontWeight: '600',
+            cursor: 'pointer',
+            boxShadow: viewMode === 'filter' ? '0 4px 12px rgba(79, 172, 254, 0.3)' : '0 2px 4px rgba(0,0,0,0.05)',
+            transition: 'all 0.3s ease',
+            fontSize: '14px'
           }}
         >
           Device Filter
@@ -233,21 +274,36 @@ function ExamTelemetry() {
       {viewMode === 'filter' && (
         <div style={{
           background: 'white',
-          padding: '20px',
-          borderRadius: '8px',
-          border: '1px solid #e5e7eb',
-          marginBottom: '24px'
+          padding: '28px',
+          borderRadius: '12px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          marginBottom: '28px',
+          border: '1px solid #e5e7eb'
         }}>
-          <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>
+          <h3 style={{
+            marginBottom: '20px',
+            fontSize: '18px',
+            fontWeight: '700',
+            color: '#1f2937',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <span style={{
+              width: '4px',
+              height: '24px',
+              background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+              borderRadius: '4px'
+            }}></span>
             Filter by Device and Session
           </h3>
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-end' }}>
             <div style={{ flex: 1 }}>
               <label style={{
                 display: 'block',
-                marginBottom: '8px',
+                marginBottom: '10px',
                 fontSize: '14px',
-                fontWeight: '500',
+                fontWeight: '600',
                 color: '#374151'
               }}>
                 Select Device
@@ -257,11 +313,17 @@ function ExamTelemetry() {
                 onChange={(e) => handleFilterDeviceChange(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #d1d5db',
-                  fontSize: '14px'
+                  padding: '12px 14px',
+                  borderRadius: '8px',
+                  border: '2px solid #e5e7eb',
+                  fontSize: '14px',
+                  background: 'white',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  outline: 'none'
                 }}
+                onFocus={(e) => e.target.style.borderColor = '#4facfe'}
+                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
               >
                 <option value="">-- Select Device --</option>
                 {allDevices.map((device) => (
@@ -274,9 +336,9 @@ function ExamTelemetry() {
             <div style={{ flex: 1 }}>
               <label style={{
                 display: 'block',
-                marginBottom: '8px',
+                marginBottom: '10px',
                 fontSize: '14px',
-                fontWeight: '500',
+                fontWeight: '600',
                 color: '#374151'
               }}>
                 Select Session
@@ -287,13 +349,18 @@ function ExamTelemetry() {
                 disabled={!filterDevice || deviceSessions.length === 0}
                 style={{
                   width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #d1d5db',
+                  padding: '12px 14px',
+                  borderRadius: '8px',
+                  border: '2px solid #e5e7eb',
                   fontSize: '14px',
+                  background: 'white',
                   opacity: !filterDevice || deviceSessions.length === 0 ? 0.5 : 1,
-                  cursor: !filterDevice || deviceSessions.length === 0 ? 'not-allowed' : 'pointer'
+                  cursor: !filterDevice || deviceSessions.length === 0 ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease',
+                  outline: 'none'
                 }}
+                onFocus={(e) => !e.target.disabled && (e.target.style.borderColor = '#4facfe')}
+                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
               >
                 <option value="">-- Select Session --</option>
                 {deviceSessions.map((session) => (
@@ -398,37 +465,85 @@ function ExamTelemetry() {
       )}
 
       {((viewMode === 'session' && selectedDevice) || (viewMode === 'filter' && filterDevice && filterSession)) && deviceTelemetry && (
-        <div className="device-telemetry">
-          <h2>Device Telemetry</h2>
-          <div className="detail-info">
-            <p><strong>Device ID:</strong> {deviceTelemetry.deviceId}</p>
-            <p><strong>Exam ID:</strong> {deviceTelemetry.examId}</p>
-            <p><strong>Session ID:</strong> {deviceTelemetry.sessionId}</p>
+        <div className="device-telemetry" style={{
+          background: 'white',
+          padding: '28px',
+          borderRadius: '12px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          border: '1px solid #e5e7eb'
+        }}>
+          <h2 style={{
+            fontSize: '24px',
+            fontWeight: '700',
+            color: '#1f2937',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <span style={{
+              width: '6px',
+              height: '28px',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              borderRadius: '4px'
+            }}></span>
+            Device Telemetry
+          </h2>
+          <div style={{
+            background: 'linear-gradient(135deg, #f6f8fb 0%, #ffffff 100%)',
+            padding: '16px 20px',
+            borderRadius: '10px',
+            marginBottom: '24px',
+            border: '1px solid #e5e7eb'
+          }}>
+            <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+              <p style={{ margin: 0 }}>
+                <strong style={{ color: '#6b7280', fontSize: '13px', fontWeight: '600' }}>Device ID:</strong>{' '}
+                <span style={{ color: '#1f2937', fontSize: '14px', fontWeight: '600' }}>{deviceTelemetry.deviceId}</span>
+              </p>
+              <p style={{ margin: 0 }}>
+                <strong style={{ color: '#6b7280', fontSize: '13px', fontWeight: '600' }}>Exam ID:</strong>{' '}
+                <span style={{ color: '#1f2937', fontSize: '14px', fontWeight: '600' }}>{deviceTelemetry.examId}</span>
+              </p>
+              <p style={{ margin: 0 }}>
+                <strong style={{ color: '#6b7280', fontSize: '13px', fontWeight: '600' }}>Session ID:</strong>{' '}
+                <span style={{ color: '#1f2937', fontSize: '14px', fontWeight: '600' }}>{deviceTelemetry.sessionId}</span>
+              </p>
+            </div>
           </div>
 
           <div style={{ marginTop: '24px' }}>
             <div style={{
               display: 'flex',
               gap: '8px',
-              borderBottom: '2px solid #e5e7eb',
-              marginBottom: '20px',
-              flexWrap: 'wrap'
+              borderBottom: '3px solid #f3f4f6',
+              marginBottom: '24px',
+              flexWrap: 'wrap',
+              background: '#fafbfc',
+              padding: '8px',
+              borderRadius: '12px 12px 0 0'
             }}>
               {Object.entries(deviceTelemetry.data).map(([dataType, items]) => (
                 <button
                   key={dataType}
                   onClick={() => setActiveDataType(dataType)}
                   style={{
-                    padding: '12px 20px',
+                    padding: '14px 24px',
                     border: 'none',
-                    background: activeDataType === dataType ? '#3b82f6' : 'transparent',
+                    background: activeDataType === dataType
+                      ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                      : 'white',
                     color: activeDataType === dataType ? 'white' : '#6b7280',
-                    fontWeight: activeDataType === dataType ? '600' : '500',
-                    fontSize: '14px',
+                    fontWeight: '700',
+                    fontSize: '13px',
                     cursor: 'pointer',
-                    borderRadius: '6px 6px 0 0',
-                    borderBottom: activeDataType === dataType ? '3px solid #3b82f6' : '3px solid transparent',
-                    transition: 'all 0.2s ease'
+                    borderRadius: '8px',
+                    transition: 'all 0.3s ease',
+                    boxShadow: activeDataType === dataType
+                      ? '0 4px 12px rgba(102, 126, 234, 0.4)'
+                      : '0 2px 4px rgba(0,0,0,0.05)',
+                    transform: activeDataType === dataType ? 'translateY(-2px)' : 'translateY(0)',
+                    letterSpacing: '0.5px'
                   }}
                 >
                   {dataType.replace(/_/g, ' ').toUpperCase()} ({items.length})
@@ -440,58 +555,98 @@ function ExamTelemetry() {
               {deviceTelemetry.data[activeDataType] && (
                 <>
                   {deviceTelemetry.data[activeDataType].length === 0 ? (
-                    <p className="empty-data" style={{
+                    <div style={{
                       textAlign: 'center',
-                      padding: '40px',
-                      color: '#9ca3af',
-                      fontSize: '16px'
+                      padding: '60px 40px',
+                      background: 'linear-gradient(135deg, #f9fafb 0%, #ffffff 100%)',
+                      borderRadius: '12px',
+                      border: '2px dashed #e5e7eb'
                     }}>
-                      No data available
-                    </p>
+                      <div style={{
+                        fontSize: '48px',
+                        marginBottom: '16px',
+                        opacity: 0.5
+                      }}>📭</div>
+                      <p style={{
+                        color: '#9ca3af',
+                        fontSize: '16px',
+                        fontWeight: '600',
+                        margin: 0
+                      }}>
+                        No data available
+                      </p>
+                    </div>
                   ) : (
                     <div className="data-list">
                       {deviceTelemetry.data[activeDataType].map((item, index) => (
                         <div key={index} className="data-item" style={{
                           background: 'white',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '8px',
-                          padding: '16px',
-                          marginBottom: '16px'
+                          border: '2px solid #f3f4f6',
+                          borderRadius: '12px',
+                          padding: '20px',
+                          marginBottom: '20px',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                          transition: 'all 0.3s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.12)';
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
+                          e.currentTarget.style.transform = 'translateY(0)';
                         }}>
                           <div className="data-header" style={{
                             display: 'flex',
                             justifyContent: 'space-between',
                             alignItems: 'center',
-                            marginBottom: '12px',
-                            paddingBottom: '12px',
-                            borderBottom: '1px solid #e5e7eb'
+                            marginBottom: '16px',
+                            paddingBottom: '16px',
+                            borderBottom: '2px solid #f3f4f6'
                           }}>
                             <span className="file-name" style={{
-                              fontWeight: '600',
+                              fontWeight: '700',
                               color: '#1f2937',
-                              fontSize: '14px'
+                              fontSize: '15px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px'
                             }}>
+                              <span style={{
+                                width: '8px',
+                                height: '8px',
+                                background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                                borderRadius: '50%',
+                                display: 'inline-block'
+                              }}></span>
                               {item._filename}
                             </span>
                             {item.received_at && (
                               <span className="timestamp" style={{
-                                color: '#6b7280',
-                                fontSize: '13px'
+                                color: '#9ca3af',
+                                fontSize: '13px',
+                                fontWeight: '500',
+                                background: '#f9fafb',
+                                padding: '4px 12px',
+                                borderRadius: '6px'
                               }}>
                                 {new Date(item.received_at).toLocaleString()}
                               </span>
                             )}
                           </div>
                           <pre className="data-content" style={{
-                            background: '#f9fafb',
-                            padding: '12px',
-                            borderRadius: '6px',
+                            background: 'linear-gradient(135deg, #fafbfc 0%, #f9fafb 100%)',
+                            padding: '16px',
+                            borderRadius: '8px',
                             fontSize: '12px',
                             overflow: 'auto',
                             maxHeight: '500px',
                             whiteSpace: 'pre-wrap',
                             wordWrap: 'break-word',
-                            wordBreak: 'break-word'
+                            wordBreak: 'break-word',
+                            border: '1px solid #e5e7eb',
+                            fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
+                            lineHeight: '1.6'
                           }}>
                             {JSON.stringify(item, null, 2)}
                           </pre>
