@@ -760,7 +760,7 @@ async def push_profile(serial: str):
             steps[3]["error"] = f"Error mounting device: {str(e)}"
             return {"success": False, "steps": steps, "message": steps[3]["error"]}
 
-        # Step 5: Copy file to device
+        # Step 5: Copy files to device
         try:
             # First, identify the root folder inside mount point
             root_folders = [f for f in mount_point.iterdir() if f.is_dir()]
@@ -774,29 +774,53 @@ async def push_profile(serial: str):
             root_folder = root_folders[0]
             print(f"DEBUG: Identified root folder: {root_folder.name}")
 
-            # Construct target path
-            target_path = root_folder / "Android" / "data" / "com.xam.kiosk" / "files" / "exam_metadata.json"
+            # Create target directory
+            target_dir = root_folder / "Android" / "data" / "com.xam.kiosk" / "files"
+            target_dir.mkdir(parents=True, exist_ok=True)
 
-            print(f"DEBUG: Copying to {target_path}")
+            # Copy exam_metadata.json
+            config_target_path = target_dir / "exam_metadata.json"
+            print(f"DEBUG: Copying config to {config_target_path}")
+            shutil.copy2(profile_path, config_target_path)
 
-            # Create parent directory if needed
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Copy the file
-            shutil.copy2(profile_path, target_path)
-
-            # Verify the file was copied
-            if target_path.exists():
-                print(f"DEBUG: Successfully copied to {target_path}")
-                steps[4]["status"] = "completed"
-            else:
+            # Verify config file was copied
+            if not config_target_path.exists():
                 steps[4]["status"] = "failed"
-                steps[4]["error"] = "Failed to verify copied file"
+                steps[4]["error"] = "Failed to verify copied config file"
                 return {"success": False, "steps": steps, "message": steps[4]["error"]}
+
+            print(f"DEBUG: Successfully copied config to {config_target_path}")
+
+            # Copy NodeApp.apk if it exists
+            nodeapp_downloads_dir = Path("/tmp/nodeapp_downloads")
+            apk_copied = False
+
+            if nodeapp_downloads_dir.exists():
+                # Find any .apk file in the downloads directory
+                apk_files = list(nodeapp_downloads_dir.glob("*.apk"))
+                if apk_files:
+                    # Use the first APK file found (or most recent)
+                    nodeapp_source = apk_files[0]
+                    apk_target_path = target_dir / "NodeApp.apk"
+                    print(f"DEBUG: Copying {nodeapp_source.name} to {apk_target_path}")
+                    shutil.copy2(nodeapp_source, apk_target_path)
+
+                    # Verify APK file was copied
+                    if apk_target_path.exists():
+                        print(f"DEBUG: Successfully copied {nodeapp_source.name} to {apk_target_path}")
+                        apk_copied = True
+                    else:
+                        print(f"WARNING: Failed to verify copied NodeApp.apk")
+                else:
+                    print(f"WARNING: No .apk files found in {nodeapp_downloads_dir}, skipping APK copy")
+            else:
+                print(f"WARNING: Downloads directory {nodeapp_downloads_dir} not found, skipping APK copy")
+
+            steps[4]["status"] = "completed"
 
         except Exception as e:
             steps[4]["status"] = "failed"
-            steps[4]["error"] = f"Failed to copy file: {str(e)}"
+            steps[4]["error"] = f"Failed to copy files: {str(e)}"
             return {"success": False, "steps": steps, "message": steps[4]["error"]}
 
         # Step 6: Unmount device
