@@ -762,37 +762,36 @@ async def push_profile(serial: str):
 
         # Step 5: Copy file to device
         try:
-            # Try multiple target locations
-            target_paths = [
-                mount_point / "Download" / "exam_metadata.json",
-                mount_point / "Android" / "data" / "com.xam.kiosk" / "files" / "exam_metadata.json",
-                mount_point / "exam_metadata.json"
-            ]
+            # First, identify the root folder inside mount point
+            root_folders = [f for f in mount_point.iterdir() if f.is_dir()]
 
-            copied = False
-            for target_path in target_paths:
-                try:
-                    print(f"DEBUG: Trying to copy to {target_path}")
-
-                    # Create parent directory if needed
-                    target_path.parent.mkdir(parents=True, exist_ok=True)
-
-                    # Copy the file
-                    shutil.copy2(profile_path, target_path)
-
-                    # Verify the file was copied
-                    if target_path.exists():
-                        copied = True
-                        print(f"DEBUG: Successfully copied to {target_path}")
-                        steps[4]["status"] = "completed"
-                        break
-                except Exception as e:
-                    print(f"DEBUG: Failed to copy to {target_path}: {str(e)}")
-                    continue
-
-            if not copied:
+            if not root_folders:
                 steps[4]["status"] = "failed"
-                steps[4]["error"] = "Failed to copy file to any target location on device"
+                steps[4]["error"] = "No root folder found in mounted device"
+                return {"success": False, "steps": steps, "message": steps[4]["error"]}
+
+            # Use the first directory found (usually "Internal shared storage" or similar)
+            root_folder = root_folders[0]
+            print(f"DEBUG: Identified root folder: {root_folder.name}")
+
+            # Construct target path
+            target_path = root_folder / "Android" / "data" / "com.xam.kiosk" / "files" / "exam_metadata.json"
+
+            print(f"DEBUG: Copying to {target_path}")
+
+            # Create parent directory if needed
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Copy the file
+            shutil.copy2(profile_path, target_path)
+
+            # Verify the file was copied
+            if target_path.exists():
+                print(f"DEBUG: Successfully copied to {target_path}")
+                steps[4]["status"] = "completed"
+            else:
+                steps[4]["status"] = "failed"
+                steps[4]["error"] = "Failed to verify copied file"
                 return {"success": False, "steps": steps, "message": steps[4]["error"]}
 
         except Exception as e:
