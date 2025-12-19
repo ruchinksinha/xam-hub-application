@@ -206,9 +206,10 @@ function DeviceTiles({ devices, onFlash, onRegister }) {
               <p className="device-vendor">Vendor: {device.vendor_id} | Product: {device.product_id}</p>
             </>
           )}
-          <p className="device-serial">Name: {device.description}</p>
-          {device.is_registered && (
+          {device.is_registered ? (
             <p className="device-registered-name" title="Registered name">📋 {device.registered_name}</p>
+          ) : (
+            <p className="device-serial">Name: {device.description}</p>
           )}
 
           <span className={`status ${device.status}`}>
